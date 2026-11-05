@@ -1,0 +1,56 @@
+import { z } from 'zod';
+
+// Product User Roles
+export const UserRole = {
+  RECRUITER: 'RECRUITER',
+  MANAGER: 'MANAGER',
+  ADMIN: 'ADMIN',
+  CLIENT: 'CLIENT',
+  CANDIDATE: 'CANDIDATE',
+} as const;
+
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+export const UserRoleSchema = z.nativeEnum(UserRole);
+
+// Common API Response Schema
+export const ApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
+  z.object({
+    success: z.boolean(),
+    data: dataSchema.optional(),
+    error: z
+      .object({
+        code: z.string(),
+        message: z.string(),
+        details: z.any().optional(),
+      })
+      .optional(),
+    meta: z
+      .object({
+        timestamp: z.string(),
+        requestId: z.string().optional(),
+      })
+      .optional(),
+  });
+
+// Health Check Response
+export const HealthCheckResponseSchema = z.object({
+  status: z.literal('ok'),
+  timestamp: z.string(),
+  uptime: z.number(),
+  environment: z.string(),
+  services: z.object({
+    database: z.enum(['connected', 'disconnected', 'unknown']),
+    redis: z.enum(['connected', 'disconnected', 'unknown']),
+  }),
+});
+
+export type HealthCheckResponse = z.infer<typeof HealthCheckResponseSchema>;
+
+// Pagination Schema
+export const PaginationParamsSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+});
+
+export type PaginationParams = z.infer<typeof PaginationParamsSchema>;
