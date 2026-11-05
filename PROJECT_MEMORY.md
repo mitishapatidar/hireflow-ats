@@ -8,6 +8,7 @@
 ## 1. Project Overview & Background
 - **Project Name:** HireFlow ATS & Recruitment CRM
 - **Organization / Client:** Aureva Capital Private Limited (Client: Recruitment & Staffing Agency)
+- **Figma Design References:** Based on project wireframes & components (Frames 00–48)
 - **Objective:** Build a complete, production-grade Applicant Tracking System (ATS) and Recruitment CRM from scratch. The system manages the entire recruitment lifecycle: sourcing & parsing resumes, managing candidates, jobs, and clients, running interviews and submissions, tracking offers and placements, team performance reporting, sales CRM for prospective clients, and a dedicated client portal.
 
 ---
