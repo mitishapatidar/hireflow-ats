@@ -23,23 +23,21 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     // In dev mode: allow developer role simulation for layout tests
     if (process.env.NODE_ENV === 'development') {
       const devRoleCookie = cookieStore.get('hireflow_dev_role')?.value as UserRole;
-      if (devRoleCookie) {
-        return {
-          id: `dev-${devRoleCookie.toLowerCase()}-1`,
-          email: `${devRoleCookie.toLowerCase()}@hireflow.io`,
-          name: `Dev ${devRoleCookie}`,
-          role: devRoleCookie,
-          organizationId: 'org-aureva-1',
-          status: 'ACTIVE',
-        };
-      }
-      // If neither session nor dev role cookie is present, allow default RECRUITER in dev
+      const firstOrg = await prisma.organization.findFirst({ select: { id: true } });
+      const orgId = firstOrg?.id || 'org-aureva-1';
+
+      const targetRole = devRoleCookie || UserRole.ADMIN;
+      const sampleUser = await prisma.user.findFirst({
+        where: { role: targetRole, organizationId: orgId, status: 'ACTIVE' },
+        select: { id: true, email: true, name: true, managerId: true, teamId: true },
+      });
+
       return {
-        id: 'dev-recruiter-1',
-        email: 'recruiter@hireflow.io',
-        name: 'Dev Recruiter',
-        role: UserRole.RECRUITER,
-        organizationId: 'org-aureva-1',
+        id: sampleUser?.id || `dev-${targetRole.toLowerCase()}-1`,
+        email: sampleUser?.email || `${targetRole.toLowerCase()}@hireflow.io`,
+        name: sampleUser?.name || `Dev ${targetRole}`,
+        role: targetRole,
+        organizationId: orgId,
         status: 'ACTIVE',
       };
     }

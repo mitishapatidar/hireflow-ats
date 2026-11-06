@@ -55,3 +55,7 @@ export * from './authorization';
 // Admin, Hierarchy & Team Management
 export * from './admin';
 export * from './hierarchy';
+
+// Candidates List & Profile Management
+export * from './candidates';
+

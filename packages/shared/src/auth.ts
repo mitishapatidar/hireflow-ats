@@ -16,8 +16,8 @@ export const PasswordPolicy = z
 // 2. CRYPTOGRAPHIC TOKEN UTILITIES
 // ==========================================
 
-export function generateSecureToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+export function generateSecureToken(byteLength: number = 32): string {
+  return crypto.randomBytes(byteLength).toString('hex');
 }
 
 export function hashToken(token: string): string {
