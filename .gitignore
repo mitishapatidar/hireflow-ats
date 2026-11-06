@@ -6,6 +6,14 @@ node_modules/
 # Testing
 coverage/
 
+# Generated Artifacts, Reports & Media
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*report.html
+design-showcase*
+
 # Next.js
 .next/
 out/
