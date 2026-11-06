@@ -97,6 +97,7 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'PATCH', url: '/api/jobs/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'POST', url: '/api/jobs/:id/transition', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'POST', url: '/api/jobs/:id/activate', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/jobs/:id/submit-for-approval', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'POST', url: '/api/jobs/:id/assignments', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
   { method: 'DELETE', url: '/api/jobs/:id/assignments/:recruiterId', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
   { method: 'POST', url: '/api/jobs/:id/applications', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
@@ -189,6 +190,29 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'GET', url: '/api/activity/targets', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'PATCH', url: '/api/activity/targets', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'GET', url: '/api/activity/recent', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+
+  // Approval Center
+  { method: 'GET', url: '/api/approvals', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/approvals/submissions/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/approvals/submissions/:id/approve', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/approvals/submissions/:id/request-changes', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/approvals/submissions/:id/reject', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/approvals/jobs/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/approvals/jobs/:id/approve', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/approvals/jobs/:id/request-changes', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/approvals/jobs/:id/reject', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/approvals/history', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+
+  // Manager Overview
+  { method: 'GET', url: '/api/manager/overview', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/manager/team-performance', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+
+  // Client Workflows & Submission Rules
+  { method: 'GET', url: '/api/clients/:clientId/workflow', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/clients/:clientId/workflow/draft', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'PATCH', url: '/api/clients/:clientId/workflow/draft', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/clients/:clientId/workflow/publish', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/clients/:clientId/workflow/versions', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
 ];
 
 async function runAuthorizationAudit() {

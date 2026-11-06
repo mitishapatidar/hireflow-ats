@@ -256,6 +256,7 @@ model SecurityPolicy {
   inactivityTimeoutMinutes             Int          @default(30)
   warningBeforeExpiryMinutes           Int          @default(5)
   sensitiveActionReverificationMinutes Int          @default(15)
+  requireJobApproval                   Boolean      @default(false)
   clientAccessPolicy                   Json?
   updatedById                          String?
   createdAt                            DateTime     @default(now())
@@ -572,20 +573,44 @@ model ClientDocument {
 }
 
 model ClientWorkflow {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   clientId      String
-  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  version       Int      @default(1)
-  isActive      Boolean  @default(true)
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  version       Int       @default(1)
+  status        String    @default("PUBLISHED") // "DRAFT" | "PUBLISHED" | "ARCHIVED"
+  isActive      Boolean   @default(true)
+  changeSummary String?
+  publishedAt   DateTime?
+  publishedById String?
   configuration Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   createdById   String?
 
   stages          ClientStage[]
+  rounds          ClientInterviewRound[]
   submissionRules SubmissionRule[]
 
   @@index([clientId])
+}
+
+model ClientInterviewRound {
+  id              String         @id @default(uuid())
+  workflowId      String
+  workflow        ClientWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  name            String
+  order           Int
+  type            String         @default("TECHNICAL") // "SCREENING" | "TECHNICAL" | "HIRING_MANAGER" | "CULTURE_FIT" | "FINAL"
+  isTechnical     Boolean        @default(false)
+  isHiringManager Boolean        @default(false)
+  isRequired      Boolean        @default(true)
+  defaultDuration Int            @default(45) // minutes
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([workflowId])
+  @@index([order])
 }
 
 model ClientStage {
@@ -594,6 +619,9 @@ model ClientStage {
   workflow      ClientWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   name          String
   order         Int
+  stageType     String         @default("CUSTOM")
+  isActive      Boolean        @default(true)
+  isArchived    Boolean        @default(false)
   configuration Json?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -610,6 +638,12 @@ model SubmissionRule {
   requiredFields          String[]       @default([])
   profileFormat           String         @default("STANDARDIZED_ANONYMIZED")
   requiresManagerApproval Boolean        @default(true)
+  requirePortfolioUrl     Boolean        @default(false)
+  requireExpectedSalary   Boolean        @default(false)
+  requireNoticePeriod     Boolean        @default(false)
+  requireCandidateConsent Boolean        @default(true)
+  requireCvDocument       Boolean        @default(true)
+  requireCompleteProfile  Boolean        @default(true)
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
   createdById             String?
@@ -665,6 +699,7 @@ model Job {
   applications           Application[]
   threads                Thread[]
   convertedFromOpportunity Opportunity?      @relation("OpportunityConvertedJob")
+  approvals              JobApproval[]
 
   @@index([organizationId])
   @@index([clientId])
@@ -751,6 +786,26 @@ model JobReassignmentRequest {
   @@index([requestingRecruiterId])
   @@index([targetRecruiterId])
   @@index([status])
+}
+
+model JobApproval {
+  id                 String     @id @default(uuid())
+  jobId              String
+  job                Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  reviewerId         String
+  decision           String     // "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"
+  comments           String?
+  jobVersion         Int        @default(1)
+  isInvalidated      Boolean    @default(false)
+  invalidatedAt      DateTime?
+  invalidationReason String?
+  approvedAt         DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  createdById        String?
+
+  @@index([jobId])
+  @@index([reviewerId])
 }
 
 // ==========================================
@@ -1009,9 +1064,12 @@ model SubmissionApproval {
   submission         Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   reviewerId         String
   decision           String
-  comments           String?
-  profileVersion     Int?
-  contentHash        String?
+  comments              String?
+  profileVersion        Int?
+  submissionVersion     Int?       @default(1)
+  clientWorkflowVersion Int?       @default(1)
+  validationSnapshot    Json?
+  contentHash           String?
   isInvalidated      Boolean    @default(false)
   invalidatedAt      DateTime?
   invalidationReason String?

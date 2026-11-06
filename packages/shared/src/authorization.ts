@@ -10,6 +10,8 @@ export type ResourceType =
   | 'interview'
   | 'submission'
   | 'submission_approval'
+  | 'job_approval'
+  | 'client_workflow'
   | 'offer'
   | 'placement'
   | 'commercial_terms'
@@ -44,6 +46,7 @@ export interface AuthResource {
   organizationId?: string;
   id?: string;
   ownerId?: string | null; // Recruiter or user who owns the record
+  createdById?: string | null;
   authorId?: string | null;
   teamId?: string | null;
   clientId?: string | null;
@@ -103,8 +106,14 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         return !!user.grants?.recruiterViewInternalFees && action === 'read';
       }
 
-      // Submission approval cannot be self-approved by recruiter
-      if (resource.type === 'submission_approval' || (resource.type === 'submission' && action === 'approve')) {
+      // Submission/Job approval and client workflows cannot be modified/approved by recruiter
+      if (
+        resource.type === 'submission_approval' ||
+        resource.type === 'job_approval' ||
+        resource.type === 'client_workflow' ||
+        (resource.type === 'submission' && action === 'approve') ||
+        (resource.type === 'job' && action === 'approve')
+      ) {
         return false;
       }
 
@@ -167,12 +176,23 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
 
       // Team Scope: Can access records owned by themselves or their managed team members
       const isTeamScoped = () => {
-        if (!resource.ownerId) return true;
-        if (resource.ownerId === user.id) return true;
+        if (!resource.ownerId && !resource.createdById) return true;
+        if (resource.ownerId === user.id || resource.createdById === user.id) return true;
         if (resource.teamId && user.teamId && resource.teamId === user.teamId) return true;
-        if (user.subordinateIds && user.subordinateIds.includes(resource.ownerId)) return true;
+        if (user.subordinateIds && resource.ownerId && user.subordinateIds.includes(resource.ownerId)) return true;
+        if (user.subordinateIds && resource.createdById && user.subordinateIds.includes(resource.createdById)) return true;
         return false;
       };
+
+      if (action === 'approve') {
+        // Strict Self-Approval Prevention: Manager cannot approve their own record!
+        if (
+          (resource.ownerId && resource.ownerId === user.id) ||
+          (resource.createdById && resource.createdById === user.id)
+        ) {
+          return false;
+        }
+      }
 
       if (resource.type === 'candidate' || resource.type === 'candidate_notes') {
         return isTeamScoped();
@@ -182,9 +202,13 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         return isTeamScoped();
       }
 
-      if (resource.type === 'submission' || resource.type === 'submission_approval') {
-        // Manager can approve submissions within team scope
+      if (resource.type === 'submission' || resource.type === 'submission_approval' || resource.type === 'job_approval') {
+        // Manager can approve submissions/jobs within team scope
         return isTeamScoped();
+      }
+
+      if (resource.type === 'client_workflow') {
+        return action === 'read';
       }
 
       if (resource.type === 'offer' || resource.type === 'placement' || resource.type === 'commercial_terms') {
@@ -202,7 +226,15 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
     // C. ADMIN
     // ------------------------------------------------------------------
     case UserRole.ADMIN: {
-      // Full access across all resources within the organization
+      if (action === 'approve') {
+        // Strict Self-Approval Prevention: Admin cannot self-approve their own record!
+        if (
+          (resource.ownerId && resource.ownerId === user.id) ||
+          (resource.createdById && resource.createdById === user.id)
+        ) {
+          return false;
+        }
+      }
       return true;
     }
 
@@ -210,10 +242,13 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
     // D. CLIENT
     // ------------------------------------------------------------------
     case UserRole.CLIENT: {
-      // Security Commandment: Never expose internal candidate notes, client commercial fees, or margins!
+      // Security Commandment: Never expose internal candidate notes, client commercial fees, internal approvals, or margins!
       if (
         resource.type === 'candidate_notes' ||
         resource.type === 'commercial_terms' ||
+        resource.type === 'submission_approval' ||
+        resource.type === 'job_approval' ||
+        resource.type === 'client_workflow' ||
         resource.type === 'organization' ||
         resource.type === 'user' ||
         resource.type === 'invitation' ||
@@ -269,6 +304,8 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         resource.type === 'candidate_notes' ||
         resource.type === 'commercial_terms' ||
         resource.type === 'submission_approval' ||
+        resource.type === 'job_approval' ||
+        resource.type === 'client_workflow' ||
         resource.type === 'organization' ||
         resource.type === 'user' ||
         resource.type === 'invitation' ||

@@ -94,5 +94,9 @@ export * from './monitoring';
 // Two-Step Login, Session Policies & OTP (Prompt 17)
 export * from './otp';
 
+// Approvals, Client Submission Rules & Manager Workflows (Prompt 18)
+export * from './approvals';
+export * from './client-workflows';
+
 
 

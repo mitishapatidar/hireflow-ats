@@ -511,8 +511,11 @@ export const jobRoutes: FastifyPluginAsync = async (server) => {
       return { status: 404, error: 'Job not found' };
     }
 
-    // Feature flag: requireJobApproval (default false in Phase 1)
-    const requireJobApproval = false;
+    // Check security policy for requireJobApproval
+    const securityPolicy = await prisma.securityPolicy.findUnique({
+      where: { organizationId: user.organizationId },
+    });
+    const requireJobApproval = securityPolicy?.requireJobApproval ?? false;
     const transitionResult = isValidJobStatusTransition(
       job.status as JobStatus,
       targetStatus,
@@ -628,6 +631,15 @@ export const jobRoutes: FastifyPluginAsync = async (server) => {
   // -------------------------------------------------------------
   server.post('/api/jobs/:id/activate', { preHandler: [(server as any).authenticate] }, async (req, rep) => {
     const result = await performStatusTransition((req.params as any).id, JobStatus.ACTIVE, req.user, { reason: 'ACTIVATED' });
+    return rep.status(result.status).send(result.error ? { success: false, error: result.error } : { success: true, data: result.data });
+  });
+
+  server.post('/api/jobs/:id/submit-for-approval', { preHandler: [(server as any).authenticate] }, async (req, rep) => {
+    const body = (req.body as any) || {};
+    const result = await performStatusTransition((req.params as any).id, JobStatus.PENDING_APPROVAL, req.user, {
+      reason: body.reason || 'SUBMITTED_FOR_APPROVAL',
+      note: body.note,
+    });
     return rep.status(result.status).send(result.error ? { success: false, error: result.error } : { success: true, data: result.data });
   });
 

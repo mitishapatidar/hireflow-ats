@@ -122,6 +122,15 @@ export const INTERNAL_NAVIGATION_ITEMS: NavigationItem[] = [
   },
   // Manager & Admin specific sections
   {
+    id: 'manager',
+    label: 'Manager Overview',
+    path: '/manager',
+    icon: 'LayoutDashboard',
+    allowedRoles: [UserRole.MANAGER, UserRole.ADMIN],
+    section: 'MANAGEMENT',
+    description: 'Manager overview dashboard, pending approvals queue, and team performance',
+  },
+  {
     id: 'approvals',
     label: 'Approvals',
     path: '/approvals',
@@ -322,6 +331,7 @@ export const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
   '/offers': [UserRole.RECRUITER, UserRole.ADMIN],
   '/clients': [UserRole.RECRUITER, UserRole.ADMIN],
   '/reports': [UserRole.RECRUITER, UserRole.ADMIN],
+  '/manager': [UserRole.MANAGER, UserRole.ADMIN],
   '/approvals': [UserRole.MANAGER, UserRole.ADMIN],
   '/assignments': [UserRole.MANAGER, UserRole.ADMIN],
   '/pipelines': [UserRole.MANAGER, UserRole.ADMIN],

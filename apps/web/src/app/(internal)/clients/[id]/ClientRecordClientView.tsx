@@ -25,6 +25,7 @@ import {
   UserCheck,
   ShieldCheck,
   Activity,
+  GitBranch,
 } from 'lucide-react';
 import {
   ClientDetailDTO,
@@ -493,6 +494,17 @@ export function ClientRecordClientView({
 
           {/* Action buttons */}
           <div className="flex items-center gap-2">
+            {isManagerOrAdmin && (
+              <Link
+                href={`/clients/${client.id}/workflow`}
+                data-testid="client-workflow-btn"
+                className="px-3.5 py-2 bg-[#EEEBFB] border border-[#D3CCF7] text-[#5B49D6] rounded-lg text-xs font-semibold hover:bg-[#E5E0FA] transition-all flex items-center gap-1.5 shadow-2xs"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                <span>Workflow & Rules</span>
+              </Link>
+            )}
+
             {canEditProfile && (
               <button
                 onClick={() => setShowEditClientModal(true)}

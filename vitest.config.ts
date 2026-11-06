@@ -6,6 +6,7 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30000,
     hookTimeout: 30000,
+    fileParallelism: false,
     include: ['**/*.test.ts', '**/*.test.tsx'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/.next/**'],
   },

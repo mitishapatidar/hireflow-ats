@@ -1056,12 +1056,26 @@ export const submissionRoutes: FastifyPluginAsync = async (server: FastifyInstan
         });
       }
 
-      // Verify approval requirement
+      // Verify approval requirement and 3-way version validity
       if (sub.approvalStatus !== SubmissionApprovalStatus.APPROVED && sub.approvalStatus !== SubmissionApprovalStatus.APPROVAL_NOT_REQUIRED) {
         return reply.status(400).send({
           success: false,
           error: `Submission cannot be sent in "${sub.approvalStatus}" status. A valid manager approval is required before presenting to client.`,
         });
+      }
+
+      if (sub.approvalStatus === SubmissionApprovalStatus.APPROVED) {
+        const latestApproval = await prisma.submissionApproval.findFirst({
+          where: { submissionId: sub.id, decision: 'APPROVED' },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (!latestApproval || latestApproval.isInvalidated || latestApproval.profileVersion !== sub.version) {
+          return reply.status(409).send({
+            success: false,
+            error: 'Approval invalidated: The standard candidate profile was modified after manager approval was granted. Re-approval is required before presenting to client.',
+          });
+        }
       }
 
       // Execute simulated / mock send with clean integration hook for Prompt 14

@@ -19,6 +19,9 @@ import { communicationRoutes } from './routes/communications.js';
 import { salesRoutes } from './routes/sales.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { activityRoutes } from './routes/activity.js';
+import { approvalRoutes } from './routes/approvals.js';
+import { managerRoutes } from './routes/manager.js';
+import { clientWorkflowRoutes } from './routes/client-workflows.js';
 
 dotenv.config();
 
@@ -134,6 +137,9 @@ export function buildServer() {
   server.register(salesRoutes, { prefix: '/api/sales' });
   server.register(dashboardRoutes, { prefix: '/api/dashboard' });
   server.register(activityRoutes, { prefix: '/api/activity' });
+  server.register(approvalRoutes, { prefix: '/api/approvals' });
+  server.register(managerRoutes, { prefix: '/api/manager' });
+  server.register(clientWorkflowRoutes, { prefix: '/api/clients' });
 
   return server;
 }
