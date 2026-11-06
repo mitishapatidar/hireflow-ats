@@ -62,6 +62,9 @@ export * from './candidates';
 // Clients CRM & Client Record Management (Prompt 9)
 export * from './clients';
 
+// Jobs & Job Lifecycle Management (Prompt 10)
+export * from './jobs';
+
 // Storage, Security & Resume Parsing Pipeline (Prompt 8)
 export * from './storage';
 export * from './security/antivirus';
