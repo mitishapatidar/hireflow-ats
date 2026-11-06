@@ -19,6 +19,17 @@ import {
   RestoreCandidateSchema,
   RestoreCandidateInput,
   SavedView,
+  CreateCandidateSchema,
+  CreateCandidateInput,
+  DuplicateCandidateMatch,
+  DuplicateCheckResult,
+  normalizeEmail,
+  normalizePhone,
+  validateFileSecurity,
+  getStorageProvider,
+  getAntivirusScanner,
+  getTextExtractor,
+  getResumeParser,
 } from '@hireflow/shared';
 
 // ---------------------------------------------------------------------------
@@ -1041,3 +1052,358 @@ export async function deleteCustomViewAction(viewId: string) {
     return { success: false, error: 'Failed to delete view' };
   }
 }
+
+// ============================================================================
+// Prompt 8: Duplicate Check, Resume Parsing & Candidate Creation Actions
+// ============================================================================
+
+export async function checkCandidateDuplicateAction(email: string, phone?: string | null) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  const normEmail = normalizeEmail(email);
+  const normPhone = normalizePhone(phone);
+
+  const matches: DuplicateCandidateMatch[] = [];
+
+  try {
+    const emailCandidates = await prisma.candidate.findMany({
+      where: {
+        organizationId: user.organizationId,
+        email: { equals: normEmail, mode: 'insensitive' },
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        email: true,
+        phone: true,
+        isArchived: true,
+        owner: { select: { id: true, name: true } },
+      },
+    });
+
+    for (const c of emailCandidates) {
+      matches.push({
+        candidateId: c.id,
+        code: c.code,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        isArchived: c.isArchived,
+        owner: c.owner,
+        matchingField: 'email',
+      });
+    }
+
+    if (normPhone) {
+      const phoneCandidates = await prisma.candidate.findMany({
+        where: {
+          organizationId: user.organizationId,
+          phone: { not: null },
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          email: true,
+          phone: true,
+          isArchived: true,
+          owner: { select: { id: true, name: true } },
+        },
+      });
+
+      for (const c of phoneCandidates) {
+        if (c.phone && normalizePhone(c.phone) === normPhone) {
+          if (!matches.some((m) => m.candidateId === c.id)) {
+            matches.push({
+              candidateId: c.id,
+              code: c.code,
+              name: c.name,
+              email: c.email,
+              phone: c.phone,
+              isArchived: c.isArchived,
+              owner: c.owner,
+              matchingField: 'phone',
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      success: true,
+      isDuplicate: matches.length > 0,
+      matches,
+    };
+  } catch (err: unknown) {
+    console.error('[checkCandidateDuplicateAction] Error:', err);
+    return { success: false, error: 'Failed to check candidate duplicates' };
+  }
+}
+
+export async function parseResumeAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  if (user.role === UserRole.CLIENT || user.role === UserRole.CANDIDATE) {
+    return { success: false, error: 'Forbidden: Insufficient role permissions for candidate intake.' };
+  }
+
+  const file = formData.get('file') as File | null;
+  if (!file) {
+    return { success: false, error: 'No file uploaded' };
+  }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 1. Security & Magic Bytes Check
+    const securityCheck = validateFileSecurity(buffer, file.name, file.type);
+    if (!securityCheck.valid) {
+      return { success: false, error: securityCheck.error };
+    }
+
+    // 2. Antivirus Scan Hook
+    const avScanner = getAntivirusScanner();
+    const avResult = await avScanner.scan(buffer, file.name);
+    if (!avResult.clean) {
+      return {
+        success: false,
+        error: `Security Alert: File flagged by security scan (${avResult.threatFound || 'Threat detected'}).`,
+      };
+    }
+
+    // 3. Private Storage Upload
+    const storage = getStorageProvider();
+    const uploadResult = await storage.uploadFile(buffer, {
+      fileName: file.name,
+      mimeType: securityCheck.detectedMime || file.type,
+      fileSize: buffer.length,
+      uploadedById: user.id,
+    });
+
+    // 4. Text Extraction
+    const extractor = getTextExtractor();
+    const extracted = await extractor.extractText(buffer, file.name);
+
+    // 5. Structured Parsing
+    const parser = getResumeParser();
+    const parsed = await parser.parseResume(extracted.rawText, {
+      fileName: file.name,
+      storageKey: uploadResult.storageKey,
+      fileSize: uploadResult.fileSize,
+      checksum: uploadResult.checksum,
+    });
+
+    // 6. Duplicate check on extracted email/phone
+    let duplicateCheck: DuplicateCheckResult = { isDuplicate: false, matches: [] };
+    if (parsed.email.value) {
+      const dupRes = await checkCandidateDuplicateAction(parsed.email.value, parsed.phone.value);
+      if (dupRes.success) {
+        duplicateCheck = { isDuplicate: dupRes.isDuplicate || false, matches: dupRes.matches || [] };
+      }
+    }
+
+    return {
+      success: true,
+      parsed,
+      duplicateCheck,
+      extractionTimeMs: extracted.extractionTimeMs,
+    };
+  } catch (err: unknown) {
+    console.error('[parseResumeAction] Parsing failed:', err);
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Failed to extract information from resume. Please try again or enter manually.',
+    };
+  }
+}
+
+export async function createCandidateAction(rawInput: CreateCandidateInput) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  if (user.role === UserRole.CLIENT || user.role === UserRole.CANDIDATE) {
+    return { success: false, error: 'Forbidden: Insufficient role permissions to create candidates.' };
+  }
+
+  const parseResult = CreateCandidateSchema.safeParse(rawInput);
+  if (!parseResult.success) {
+    const errorMsg = parseResult.error.errors.map((e) => e.message).join(', ');
+    return { success: false, error: errorMsg };
+  }
+
+  const input = parseResult.data;
+  const normEmail = normalizeEmail(input.email);
+  const normPhone = normalizePhone(input.phone);
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Strict Duplicate Check inside transaction to prevent race conditions
+      // Checks both active and archived candidates within the organization
+      const duplicateConditions: Prisma.CandidateWhereInput[] = [
+        { email: { equals: normEmail, mode: 'insensitive' } },
+      ];
+      if (normPhone) {
+        duplicateConditions.push({ phone: { contains: normPhone } });
+      }
+
+      const existing = await tx.candidate.findFirst({
+        where: {
+          organizationId: user.organizationId,
+          OR: duplicateConditions,
+        },
+        select: { id: true, code: true, name: true, email: true, phone: true, isArchived: true },
+      });
+
+      if (existing) {
+        const matchedField = existing.email.toLowerCase() === normEmail ? 'email' : 'phone';
+        throw new Error(
+          `Candidate with matching ${matchedField} already exists in your workspace (${existing.code}: ${existing.name}${existing.isArchived ? ', Archived' : ''}). Duplicate candidate creation is strictly blocked.`
+        );
+      }
+
+      // 2. Resolve Owner
+      let resolvedOwnerId = user.id;
+      if (input.ownerId && input.ownerId !== user.id) {
+        // Verify owner is an active user in the same organization
+        const ownerUser = await tx.user.findFirst({
+          where: { id: input.ownerId, organizationId: user.organizationId, status: 'ACTIVE' },
+          select: { id: true },
+        });
+        if (ownerUser) {
+          resolvedOwnerId = ownerUser.id;
+        }
+      }
+
+      // 3. Generate Sequential Code (e.g. cand-c-0061)
+      const count = await tx.candidate.count({ where: { organizationId: user.organizationId } });
+      const code = `cand-c-${String(count + 1).padStart(4, '0')}`;
+
+      // 4. Create Candidate Record
+      const candidate = await tx.candidate.create({
+        data: {
+          code,
+          name: input.name,
+          email: normEmail,
+          phone: input.phone || null,
+          currentTitle: input.currentTitle || null,
+          currentCompany: input.currentCompany || null,
+          experienceYears:
+            input.experienceYears !== null && input.experienceYears !== undefined
+              ? new Prisma.Decimal(input.experienceYears)
+              : null,
+          currentSalary:
+            input.currentSalary !== null && input.currentSalary !== undefined
+              ? new Prisma.Decimal(input.currentSalary)
+              : null,
+          expectedSalary:
+            input.expectedSalary !== null && input.expectedSalary !== undefined
+              ? new Prisma.Decimal(input.expectedSalary)
+              : null,
+          noticePeriod: input.noticePeriod || null,
+          location: input.location || null,
+          skills: input.skills || [],
+          source: input.source || 'Resume Upload',
+          ownerId: resolvedOwnerId,
+          organizationId: user.organizationId,
+          createdById: user.id,
+        },
+      });
+
+      // 5. Create Tags
+      if (input.tags && input.tags.length > 0) {
+        for (const tag of input.tags) {
+          if (tag.trim()) {
+            await tx.candidateTag.create({
+              data: {
+                candidateId: candidate.id,
+                name: tag.trim(),
+                createdById: user.id,
+              },
+            });
+          }
+        }
+      }
+
+      // 6. Create Internal Note (Confidential)
+      if (input.notes && input.notes.trim()) {
+        await tx.candidateNote.create({
+          data: {
+            candidateId: candidate.id,
+            authorId: user.id,
+            content: input.notes.trim(),
+            isInternalOnly: true,
+            createdById: user.id,
+          },
+        });
+      }
+
+      // 7. Create Resume Document Relationship
+      if (input.resumeDocument) {
+        await tx.candidateDocument.create({
+          data: {
+            candidateId: candidate.id,
+            fileName: input.resumeDocument.fileName,
+            fileUrl: input.resumeDocument.storageKey,
+            storageBucket: 'resumes',
+            documentType: input.resumeDocument.documentType || 'RESUME',
+            uploadedById: user.id,
+            createdById: user.id,
+          },
+        });
+      }
+
+      // 8. Record Audit Log
+      await tx.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'CANDIDATE_CREATED',
+          entity: 'candidate',
+          entityId: candidate.id,
+          after: {
+            code: candidate.code,
+            name: candidate.name,
+            email: candidate.email,
+            ownerId: resolvedOwnerId,
+          },
+        },
+      });
+
+      return {
+        id: candidate.id,
+        code: candidate.code,
+        name: candidate.name,
+      };
+    });
+
+    revalidatePath('/candidates');
+    revalidatePath('/dashboard');
+
+    return {
+      success: true,
+      candidate: result,
+    };
+  } catch (err: unknown) {
+    console.error('[createCandidateAction] Error creating candidate:', err);
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Failed to save candidate. Please verify the details and try again.',
+    };
+  }
+}
+

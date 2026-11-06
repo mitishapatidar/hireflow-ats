@@ -59,3 +59,10 @@ export * from './hierarchy';
 // Candidates List & Profile Management
 export * from './candidates';
 
+// Storage, Security & Resume Parsing Pipeline (Prompt 8)
+export * from './storage';
+export * from './security/antivirus';
+export * from './extraction';
+export * from './parser';
+
+

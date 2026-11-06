@@ -9,6 +9,11 @@ import {
   CandidateHandoverSchema,
   ArchiveCandidateSchema,
   RestoreCandidateSchema,
+  CreateCandidateSchema,
+  DuplicateCheckSchema,
+  normalizeEmail,
+  normalizePhone,
+  getResumeParser,
 } from '@hireflow/shared';
 
 const candidateRoutes: FastifyPluginAsync = async (server) => {
@@ -774,6 +779,417 @@ const candidateRoutes: FastifyPluginAsync = async (server) => {
         success: true,
         data: { candidate: updated, message: 'Candidate restored successfully' },
       });
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 9. POST /api/candidates/check-duplicate (Prompt 8)
+  // -------------------------------------------------------------
+  server.post(
+    '/api/candidates/check-duplicate',
+    {
+      preHandler: [(server as any).authenticate],
+    },
+    async (request, reply) => {
+      const user = request.user!;
+      const parsed = DuplicateCheckSchema.safeParse(request.body);
+
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'Invalid duplicate check parameters',
+            details: parsed.error.flatten().fieldErrors,
+          },
+        });
+      }
+
+      const normEmail = normalizeEmail(parsed.data.email);
+      const normPhone = normalizePhone(parsed.data.phone);
+
+      const emailMatches = await prisma.candidate.findMany({
+        where: {
+          organizationId: user.organizationId,
+          email: { equals: normEmail, mode: 'insensitive' },
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          email: true,
+          phone: true,
+          isArchived: true,
+          owner: { select: { id: true, name: true } },
+        },
+      });
+
+      const matches: any[] = emailMatches.map((c) => ({
+        candidateId: c.id,
+        code: c.code,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        isArchived: c.isArchived,
+        owner: c.owner,
+        matchingField: 'email',
+      }));
+
+      if (normPhone) {
+        const phoneMatches = await prisma.candidate.findMany({
+          where: {
+            organizationId: user.organizationId,
+            phone: { not: null },
+          },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            email: true,
+            phone: true,
+            isArchived: true,
+            owner: { select: { id: true, name: true } },
+          },
+        });
+
+        for (const c of phoneMatches) {
+          if (c.phone && normalizePhone(c.phone) === normPhone) {
+            if (!matches.some((m) => m.candidateId === c.id)) {
+              matches.push({
+                candidateId: c.id,
+                code: c.code,
+                name: c.name,
+                email: c.email,
+                phone: c.phone,
+                isArchived: c.isArchived,
+                owner: c.owner,
+                matchingField: 'phone',
+              });
+            }
+          }
+        }
+      }
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          isDuplicate: matches.length > 0,
+          matches,
+        },
+      });
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 10. POST /api/candidates/parse-text (Prompt 8 Structured Parser)
+  // -------------------------------------------------------------
+  server.post(
+    '/api/candidates/parse-text',
+    {
+      preHandler: [(server as any).authenticate],
+    },
+    async (request, reply) => {
+      const user = request.user!;
+      if (user.role === UserRole.CLIENT || user.role === UserRole.CANDIDATE) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN_RESOURCE', message: 'You cannot parse resumes' },
+        });
+      }
+
+      const body = request.body as any;
+      const rawText = body?.rawText;
+      const fileName = body?.fileName || 'resume.pdf';
+
+      if (!rawText || typeof rawText !== 'string') {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_INPUT', message: 'rawText is required' },
+        });
+      }
+
+      const parser = getResumeParser();
+      const parsed = await parser.parseResume(rawText, { fileName });
+
+      return reply.status(200).send({
+        success: true,
+        data: parsed,
+      });
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 11. BullMQ Background Processing Endpoints
+  // -------------------------------------------------------------
+  server.get(
+    '/api/candidates/queue/status',
+    {
+      preHandler: [(server as any).authenticate],
+    },
+    async (request, reply) => {
+      const user = request.user!;
+      if (user.role === UserRole.CLIENT || user.role === UserRole.CANDIDATE) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN_RESOURCE', message: 'Unauthorized' },
+        });
+      }
+
+      const { getResumeQueueManager } = await import('../queue/resume-queue.js');
+      const queueManager = getResumeQueueManager();
+      const status = await queueManager.getQueueStatus();
+
+      return reply.status(200).send({
+        success: true,
+        data: status,
+      });
+    }
+  );
+
+  server.post(
+    '/api/candidates/jobs/parse-resume',
+    {
+      preHandler: [(server as any).authenticate],
+    },
+    async (request, reply) => {
+      const user = request.user!;
+      if (user.role === UserRole.CLIENT || user.role === UserRole.CANDIDATE) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN_RESOURCE', message: 'Unauthorized' },
+        });
+      }
+
+      const body = request.body as any;
+      if (!body.storageKey || !body.fileName || !body.fileChecksum) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_INPUT', message: 'storageKey, fileName, and fileChecksum are required' },
+        });
+      }
+
+      const { getResumeQueueManager } = await import('../queue/resume-queue.js');
+      const queueManager = getResumeQueueManager();
+      const enqueueResult = await queueManager.enqueueJob({
+        storageKey: body.storageKey,
+        fileName: body.fileName,
+        fileChecksum: body.fileChecksum,
+        organizationId: user.organizationId,
+        userId: user.id,
+      });
+
+      return reply.status(202).send({
+        success: true,
+        data: enqueueResult,
+      });
+    }
+  );
+
+  server.get(
+    '/api/candidates/jobs/:jobId',
+    {
+      preHandler: [(server as any).authenticate],
+    },
+    async (request, reply) => {
+      const user = request.user!;
+      if (user.role === UserRole.CLIENT || user.role === UserRole.CANDIDATE) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN_RESOURCE', message: 'Unauthorized' },
+        });
+      }
+
+      const { jobId } = request.params as { jobId: string };
+      const { getResumeQueueManager } = await import('../queue/resume-queue.js');
+      const queueManager = getResumeQueueManager();
+      const jobStatus = await queueManager.getJob(jobId);
+
+      return reply.status(200).send({
+        success: true,
+        data: jobStatus,
+      });
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 12. POST /api/candidates (Explicit Creation & Transaction)
+  // -------------------------------------------------------------
+  server.post(
+    '/api/candidates',
+    {
+      preHandler: [(server as any).authenticate],
+    },
+    async (request, reply) => {
+      const user = request.user!;
+
+      const parsed = CreateCandidateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'Invalid candidate input',
+            details: parsed.error.flatten().fieldErrors,
+          },
+        });
+      }
+
+      const input = parsed.data;
+
+      const allowed = can(user, 'create', {
+        type: 'candidate',
+        ownerId: input.ownerId || user.id,
+        organizationId: user.organizationId,
+      });
+
+      if (!allowed) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN_RESOURCE', message: 'You are not authorized to create candidates' },
+        });
+      }
+      const normEmail = normalizeEmail(input.email);
+      const normPhone = normalizePhone(input.phone);
+
+      try {
+        const created = await prisma.$transaction(async (tx) => {
+          // Pre-save duplicate check against active and archived candidates within organization
+          const duplicateConditions: any[] = [
+            { email: { equals: normEmail, mode: 'insensitive' } },
+          ];
+          if (normPhone) {
+            duplicateConditions.push({ phone: { contains: normPhone } });
+          }
+
+          const existing = await tx.candidate.findFirst({
+            where: {
+              organizationId: user.organizationId,
+              OR: duplicateConditions,
+            },
+            select: { id: true, code: true, name: true, email: true, phone: true, isArchived: true },
+          });
+
+          if (existing) {
+            const matchedField = existing.email.toLowerCase() === normEmail ? 'email' : 'phone';
+            throw new Error(
+              `Candidate with matching ${matchedField} already exists (${existing.code}: ${existing.name}${existing.isArchived ? ', Archived' : ''}). Duplicate candidate creation is strictly blocked.`
+            );
+          }
+
+          // Resolve owner
+          let resolvedOwnerId = user.id;
+          if (input.ownerId && input.ownerId !== user.id) {
+            const owner = await tx.user.findFirst({
+              where: { id: input.ownerId, organizationId: user.organizationId, status: 'ACTIVE' },
+            });
+            if (owner) {
+              resolvedOwnerId = owner.id;
+            }
+          }
+
+          const count = await tx.candidate.count({ where: { organizationId: user.organizationId } });
+          const code = `cand-c-${String(count + 1).padStart(4, '0')}`;
+
+          const cand = await tx.candidate.create({
+            data: {
+              code,
+              name: input.name,
+              email: normEmail,
+              phone: input.phone || null,
+              currentTitle: input.currentTitle || null,
+              currentCompany: input.currentCompany || null,
+              experienceYears:
+                input.experienceYears !== null && input.experienceYears !== undefined
+                  ? new Prisma.Decimal(input.experienceYears)
+                  : null,
+              currentSalary:
+                input.currentSalary !== null && input.currentSalary !== undefined
+                  ? new Prisma.Decimal(input.currentSalary)
+                  : null,
+              expectedSalary:
+                input.expectedSalary !== null && input.expectedSalary !== undefined
+                  ? new Prisma.Decimal(input.expectedSalary)
+                  : null,
+              noticePeriod: input.noticePeriod || null,
+              location: input.location || null,
+              skills: input.skills || [],
+              source: input.source || 'Direct Entry',
+              ownerId: resolvedOwnerId,
+              organizationId: user.organizationId,
+              createdById: user.id,
+            },
+          });
+
+          if (input.tags && input.tags.length > 0) {
+            for (const t of input.tags) {
+              if (t.trim()) {
+                await tx.candidateTag.create({
+                  data: { candidateId: cand.id, name: t.trim(), createdById: user.id },
+                });
+              }
+            }
+          }
+
+          if (input.notes && input.notes.trim()) {
+            await tx.candidateNote.create({
+              data: {
+                candidateId: cand.id,
+                authorId: user.id,
+                content: input.notes.trim(),
+                isInternalOnly: true,
+                createdById: user.id,
+              },
+            });
+          }
+
+          if (input.resumeDocument) {
+            await tx.candidateDocument.create({
+              data: {
+                candidateId: cand.id,
+                fileName: input.resumeDocument.fileName,
+                fileUrl: input.resumeDocument.storageKey,
+                storageBucket: 'resumes',
+                documentType: input.resumeDocument.documentType || 'RESUME',
+                uploadedById: user.id,
+                createdById: user.id,
+              },
+            });
+          }
+
+          await tx.auditLog.create({
+            data: {
+              actorId: user.id,
+              action: 'candidate.created',
+              entity: 'candidate',
+              entityId: cand.id,
+              after: { code: cand.code, name: cand.name, email: cand.email },
+              ipAddress: request.ip || '127.0.0.1',
+            },
+          });
+
+          return cand;
+        });
+
+        return reply.status(201).send({
+          success: true,
+          data: {
+            candidate: created,
+            message: 'Candidate created successfully',
+          },
+        });
+      } catch (err: any) {
+        if (err.message?.includes('already exists')) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'DUPLICATE_CANDIDATE', message: err.message },
+          });
+        }
+        server.log.error(err, 'Failed to create candidate');
+        return reply.status(500).send({
+          success: false,
+          error: { code: 'INTERNAL_ERROR', message: 'Failed to create candidate' },
+        });
+      }
     }
   );
 };

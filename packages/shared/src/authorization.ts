@@ -106,11 +106,10 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         return false;
       }
 
-      // Candidate access: Must be owner or assigned recruiter
+      // Candidate access: Must be owner or assigned recruiter, or creator
       if (resource.type === 'candidate') {
-        if (!resource.ownerId) {
-          // Unassigned candidate created by this recruiter
-          return action === 'create';
+        if (action === 'create') {
+          return !resource.ownerId || resource.ownerId === user.id;
         }
         return resource.ownerId === user.id;
       }
