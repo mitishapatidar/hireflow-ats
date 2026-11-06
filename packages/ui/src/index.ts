@@ -1,3 +1,5 @@
+'use client';
+
 export * from './tokens';
 
 // Utilities
