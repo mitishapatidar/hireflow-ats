@@ -72,6 +72,9 @@ export * from './pipeline';
 export * from './match-scoring';
 export * from './submissions';
 
+// Interviews Calendar & Scheduling (Prompt 12)
+export * from './interviews';
+
 // Storage, Security & Resume Parsing Pipeline (Prompt 8)
 export * from './storage';
 export * from './security/antivirus';

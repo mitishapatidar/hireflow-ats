@@ -783,10 +783,20 @@ model Interview {
   round         JobRound?        @relation(fields: [roundId], references: [id], onDelete: SetNull)
   scheduledAt   DateTime
   duration      Int              @default(45)
+  timezone      String           @default("Asia/Kolkata")
   mode          String           @default("VIDEO")
   provider      String           @default("GOOGLE_MEET")
   meetingLink   String?
   outcome       InterviewOutcome @default(SCHEDULED)
+  rescheduleReason    String?
+  outcomeNotes        String?
+  completedAt         DateTime?
+  noShowAt            DateTime?
+  cancelledAt         DateTime?
+  cancellationReason  String?
+  previousScheduledAt DateTime?
+  reminderConfig      Json?
+  isArchived          Boolean          @default(false)
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   createdById   String?
@@ -794,10 +804,12 @@ model Interview {
   panelMembers    InterviewPanelMember[]
   feedbacks       InterviewFeedback[]
   slotInvitations SlotInvitation[]
+  histories       InterviewHistory[]
 
   @@index([applicationId])
   @@index([scheduledAt])
   @@index([outcome])
+  @@index([isArchived])
 }
 
 model InterviewPanelMember {
@@ -825,14 +837,34 @@ model InterviewFeedback {
   rating         Int
   feedback       String
   recommendation String
+  strengths      String?
+  concerns       String?
+  technicalScore Int?
   submittedAt    DateTime  @default(now())
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   createdById    String?
+  updatedById    String?
 
   @@unique([interviewId, reviewerId])
   @@index([interviewId])
   @@index([reviewerId])
+}
+
+model InterviewHistory {
+  id          String    @id @default(uuid())
+  interviewId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  action      String
+  fromTime    DateTime?
+  toTime      DateTime?
+  reason      String?
+  actorId     String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([interviewId])
+  @@index([action])
 }
 
 model SlotInvitation {
@@ -1128,21 +1160,25 @@ model AutomationRule {
 }
 
 model Task {
-  id           String       @id @default(uuid())
-  title        String
-  description  String?
-  assignedToId String
-  assignedTo   User         @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: Cascade)
-  dueDate      DateTime?
-  status       TaskStatus   @default(PENDING)
-  priority     TaskPriority @default(MEDIUM)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  createdById  String?
+  id                   String       @id @default(uuid())
+  title                String
+  description          String?
+  assignedToId         String
+  assignedTo           User         @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: Cascade)
+  dueDate              DateTime?
+  status               TaskStatus   @default(PENDING)
+  priority             TaskPriority @default(MEDIUM)
+  relatedInterviewId   String?
+  relatedApplicationId String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  createdById          String?
 
   @@index([assignedToId])
   @@index([status])
   @@index([dueDate])
+  @@index([relatedInterviewId])
+  @@index([relatedApplicationId])
 }
 
 model Notification {
