@@ -7,8 +7,12 @@
   "scripts": {
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "typecheck": "tsc --noEmit"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.16.2",
@@ -16,6 +20,7 @@
   },
   "devDependencies": {
     "prisma": "^5.16.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.5.4"
   }
 }

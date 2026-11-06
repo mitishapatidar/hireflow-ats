@@ -104,7 +104,8 @@ All development must adhere to `AGENTS.md` and `.agents/rules/`:
 | 2026-11-06 | Phase 0 | Design System from Figma (Prompt 2) | ✅ Completed | Built comprehensive reusable design system in `@hireflow/ui` with exact Figma tokens (#5B49D6, #EEEBFB, #1E2A4A, #F6F7FB, #FFFFFF, #E6E8F0, #1B2236, #6B7490) and 13-section showcase at `/design`. Passed all builds and tests. |
 | 2026-11-06 | Phase 0 | Live Vercel Production Deployment | ✅ Completed | Deployed to Vercel: [hireflow-ats-nine.vercel.app](https://hireflow-ats-nine.vercel.app) & [hireflow-ats-nine.vercel.app/design](https://hireflow-ats-nine.vercel.app/design). |
 | 2026-11-06 | Phase 0 | Application Shell & Role Nav (Prompt 3) | ✅ Completed | Built config-driven navigation in `@hireflow/shared`, Next.js route groups `(internal)`, `(client)`, `(candidate)`, `(public)`, dark navy shell (#1E2A4A), top bar with Ctrl+K command palette, notifications, mobile drawer, dev role switcher context, route guards, and 22 landing pages. Passed 14 unit tests, 9 Playwright E2E tests, and 29/29 Next.js static page builds. |
-| 2026-11-06 | Phase 1 | Database Schema & Supabase Setup (Prompt 4) | ⏳ Next | Next milestone awaiting explicit user approval. |
+| 2026-11-06 | Phase 1 | Database Schema & Supabase Setup (Prompt 4) | ✅ Completed | Implemented production schema with 54 models and 13 enums across modules A–J in `packages/db`. Synchronized with remote Supabase PostgreSQL instance. Generated migration history (`20261106000000_init_hireflow_schema`). Seeded idempotent dataset: 1 Org, 6 Users, 4 Clients, 8 Jobs, 60 Candidates, Applications, Interviews, Offers, and 1 closed Placement (₹3,23,000 fee). Created complete ER diagram in `docs/erd.md`. Passed all unit tests, typechecks, and 29/29 web page builds. |
+| 2026-11-06 | Phase 1 | Authentication & Role Permissions (Prompt 5) | ⏳ Next | Next milestone awaiting explicit user approval. |
 
 ---
 
