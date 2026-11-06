@@ -103,7 +103,8 @@ All development must adhere to `AGENTS.md` and `.agents/rules/`:
 | 2026-11-06 | Phase 0 | Monorepo Setup (Prompt 1) | ✅ Completed | Created Turborepo + pnpm monorepo (`apps/web`, `apps/api`, `packages/db`, `packages/shared`, `packages/ui`). Passed `turbo build` and `turbo test`. |
 | 2026-11-06 | Phase 0 | Design System from Figma (Prompt 2) | ✅ Completed | Built comprehensive reusable design system in `@hireflow/ui` with exact Figma tokens (#5B49D6, #EEEBFB, #1E2A4A, #F6F7FB, #FFFFFF, #E6E8F0, #1B2236, #6B7490) and 13-section showcase at `/design`. Passed all builds and tests. |
 | 2026-11-06 | Phase 0 | Live Vercel Production Deployment | ✅ Completed | Deployed to Vercel: [hireflow-ats-nine.vercel.app](https://hireflow-ats-nine.vercel.app) & [hireflow-ats-nine.vercel.app/design](https://hireflow-ats-nine.vercel.app/design). |
-| 2026-11-06 | Phase 0 | Application Shell & Role Nav (Prompt 3) | ⏳ Next | Next task to start upon approval. |
+| 2026-11-06 | Phase 0 | Application Shell & Role Nav (Prompt 3) | ✅ Completed | Built config-driven navigation in `@hireflow/shared`, Next.js route groups `(internal)`, `(client)`, `(candidate)`, `(public)`, dark navy shell (#1E2A4A), top bar with Ctrl+K command palette, notifications, mobile drawer, dev role switcher context, route guards, and 22 landing pages. Passed 14 unit tests, 9 Playwright E2E tests, and 29/29 Next.js static page builds. |
+| 2026-11-06 | Phase 1 | Database Schema & Supabase Setup (Prompt 4) | ⏳ Next | Next milestone awaiting explicit user approval. |
 
 ---
 

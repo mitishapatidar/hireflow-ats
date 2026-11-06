@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { ClientProviders } from '../components/layout/ClientProviders';
 
 export const metadata: Metadata = {
   title: 'HireFlow — ATS & Recruitment CRM',
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-page-bg text-text antialiased">{children}</body>
+      <body className="min-h-screen bg-[#F6F7FB] text-[#1B2236] antialiased">
+        <ClientProviders>{children}</ClientProviders>
+      </body>
     </html>
   );
 }
