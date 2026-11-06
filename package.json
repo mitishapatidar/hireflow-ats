@@ -8,6 +8,8 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "check:auth": "pnpm --filter @hireflow/api exec tsx ../../scripts/check-authorization-coverage.ts",
+    "demo:reset": "pnpm --filter @hireflow/db exec tsx scripts/demo-reset.ts",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
   },
   "devDependencies": {

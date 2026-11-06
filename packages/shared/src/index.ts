@@ -88,4 +88,8 @@ export * from './security/antivirus';
 export * from './extraction';
 export * from './parser';
 
+// Monitoring, Telemetry & Sentry Integration (Prompt 16)
+export * from './monitoring';
+
+
 

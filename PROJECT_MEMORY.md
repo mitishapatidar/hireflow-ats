@@ -47,30 +47,18 @@ All development must adhere to `AGENTS.md` and `.agents/rules/`:
 
 ## 5. Scope Roadmap (3 Phases)
 
-### Phase 1 — Core ATS Foundation (Current Target)
-- [ ] Next.js + TypeScript + Tailwind initialization and setup
-- [ ] Supabase PostgreSQL database connection + Prisma ORM schema
-- [ ] Authentication (Email/Password, Google OAuth, Role-based route protection)
-- [ ] Team structure & reporting lines (Admin, Manager, Recruiter)
-- [x] Candidate Management:
-  - [x] Manual candidate profile entry
-  - [x] Resume auto-fill parser (PDF & Word `.docx`)
-  - [x] Candidate profile view (salary, location, notes, tags)
-  - [x] Candidate database search & filtering
-- [ ] Jobs & Clients:
-  - [x] Client master records & contacts (Prompt 9)
-  - [x] Job openings with interview rounds configuration (Prompt 10)
-  - [x] Job status tracking (Open, Paused, Closed with reasons) (Prompt 10)
-  - [x] Job assignment to recruiters & reassignment requests (Prompt 10)
-- [ ] Pipeline & Submissions:
-  - [ ] Kanban / list pipeline view (Prompt 11)
-  - [ ] Interview scheduling & rejection reasons
-  - [ ] Standardized profile sharing with clients
-- [ ] Communication & Sales CRM:
-  - [ ] Email and WhatsApp message templates
-  - [ ] Prospective client lead tracker & meeting logs
-  - [ ] Convert won lead to job opening
-  - [ ] Recruiter daily activity dashboard & job-wise pipeline metrics
+### Phase 1 — Core ATS Foundation (Phase 1 Completed & Demo-Ready)
+- [x] Next.js + TypeScript + Tailwind initialization and setup (Prompts 1–3)
+- [x] Supabase PostgreSQL database connection + Prisma ORM schema (Prompt 4)
+- [x] Authentication (Email/Password, Google OAuth, Role-based route protection) (Prompt 5)
+- [x] Team structure & reporting lines (Admin, Manager, Recruiter) (Prompt 6)
+- [x] Candidate Management & Resume Parsing (Prompts 7 & 8)
+- [x] Jobs & Clients CRM (Prompts 9 & 10)
+- [x] Pipeline Kanban & Interviews Calendar (Prompts 11 & 12)
+- [x] Client Submissions & Standard Profiles (Prompt 13)
+- [x] Communications Hub, Integrations & Templates (Prompt 14)
+- [x] Sales CRM & Recruiter Dashboards (Prompt 15)
+- [x] Hardening, Authorization Coverage & Demo Preparation (Prompt 16)
 
 ### Phase 2 — Control, Scale & Productivity
 - [ ] Two-step OTP login & auto-logout
@@ -116,6 +104,7 @@ All development must adhere to `AGENTS.md` and `.agents/rules/`:
 | 2026-11-06 | Phase 1 | Interviews Calendar & Scheduling (Prompt 12) | ✅ Completed | Implemented Interviews Calendar (Figma Frame 06 at `/interviews`) and Schedule Interview workflow (Figma Frame 27) with Asia/Kolkata display and UTC storage, 4 live database-backed statistics cards, panel availability check with strict privacy masking, mock video providers (Google Meet, Zoom, Teams in demo mode), double-booking prevention in transaction (HTTP 409), outcome workflows (`COMPLETED`, `NO_SHOW`, `RESCHEDULED`, `CANCELLED`), ATS safety rule ensuring no-shows never auto-reject, internal panel feedback with anti-leak protection, follow-up task creation, and rejection workflow integration. Passed 166 shared tests, 11 API tests, and Next.js production build. |
 | 2026-11-06 | Phase 1 | Communications, Integrations & Templates (Prompt 14) | ✅ Completed | Implemented Candidate Communications (Figma Frame 24 at `/communications`), Templates & Signature (Figma Frame 25 at `/communications/templates`), and Integrations (Figma Frame 34 at `/integrations`). Built AES-256-GCM OAuth token encryption engine with 12-byte IV and 16-byte auth tags, dynamic merge fields resolution with XSS HTML escaping and missing variable warnings, admin-owned shared corporate email signature engine, Meta WhatsApp Business Cloud API compliance (candidate opt-in validation, 24-hour customer care service window enforcement restricting outside-window sends strictly to Meta-approved templates, email signature exclusion), SMS provider abstraction with TRAI DLT/Twilio demo mode notice, HMAC-SHA256 webhook delivery state progressions (`SENT` -> `DELIVERED` -> `READ` -> `FAILED`), and unified candidate activity timeline (`CandidateActivity`). Passed all 187 shared package tests, 12 API integration tests, and clean Next.js production build. |
 | 2026-11-06 | Phase 1 | Sales CRM & Recruiter Dashboards (Prompt 15) | ✅ Completed | Implemented Sales CRM (Figma Frame 23 at `/sales`), Recruiter Dashboard (Figma Frame 01 at `/dashboard`), and Recruiter Daily Activity (Figma Frame 39 at `/activity`). Built 4-stage sales pipeline (`PROSPECTING`, `MEETING`, `PROPOSAL`, `WON`), stage transition state machine, transactional conversion of WON opportunities into active Clients and DRAFT Jobs (strictly DRAFT, sequential code `J-209`+), client meeting tracker with `DEMO_MODE` calendar sync notice, 4 real database-backed KPI cards (Active Jobs, Candidates, Interviews This Week, Placements This Month) with zero-division safe month-over-month deltas (`+N new`), pipeline distribution chart, today's agenda in IST, recent candidate activity, 5 daily activity metrics vs configurable targets, and manual call/activity logger. Added 8 documentation files in `docs/`. Passed all 209 shared tests, 13 API tests, recursive typecheck, and clean Next.js production build. |
+| 2026-11-06 | Phase 1 | Hardening, Authorization Coverage & Demo Preparation (Prompt 16) | ✅ Completed | Hardened full Phase 1 platform: implemented global React error boundaries (`global-error.tsx`, `error.tsx`), Fastify RFC-4122 v4 request ID generation and correlation header propagation, Sentry-compatible monitoring service with automatic credential, PII, and commercial fee scrubbing (`@hireflow/shared/monitoring`), 100% authorization coverage CI test across 130 endpoints (`pnpm check:auth`), database performance audit across 166 compound indexes and zero N+1 queries, Figma visual review report across 19 frames with verified design tokens, safe demo environment reset script (`pnpm demo:reset`) with production environment safeguards and tenant isolation for Aureva Capital, 22-step golden-path E2E Playwright test (`e2e/phase1-golden-path.spec.ts`), client demo presentation script (`docs/phase-1-demo-script.md`), demo environment guide (`docs/demo-environment.md`), and Phase 1 delivery report (`docs/phase-1.md`). All builds, tests, typechecks, and auth verification passed. |
 
 ---
 

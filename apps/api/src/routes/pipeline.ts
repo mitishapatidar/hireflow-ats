@@ -321,7 +321,7 @@ export const pipelineRoutes: FastifyPluginAsync = async (server) => {
       if (job.status === JobStatus.PAUSED || job.status === JobStatus.CLOSED) {
         return reply.status(409).send({
           success: false,
-          error: `Job mandate is currently ${job.status}. New applications are strictly blocked.`,
+          error: `Job mandate is currently ${job.status} and cannot accept new candidate submissions. New applications are strictly blocked.`,
         });
       }
 

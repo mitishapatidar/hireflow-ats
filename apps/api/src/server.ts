@@ -1,7 +1,9 @@
 import Fastify from 'fastify';
 import dotenv from 'dotenv';
+import crypto from 'node:crypto';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import { monitoring } from '@hireflow/shared';
 import healthRoute from './routes/health.js';
 import csrfPlugin from './plugins/csrf.js';
 import authPlugin from './plugins/auth.js';
@@ -23,6 +25,14 @@ dotenv.config();
 export function buildServer() {
   const isTest = process.env.NODE_ENV === 'test';
   const server = Fastify({
+    requestIdHeader: 'x-request-id',
+    genReqId: (req) => {
+      const incoming = req.headers['x-request-id'];
+      if (typeof incoming === 'string' && incoming.trim().length > 0) {
+        return incoming.trim();
+      }
+      return crypto.randomUUID();
+    },
     logger: isTest
       ? false
       : {
@@ -41,15 +51,56 @@ export function buildServer() {
         },
   });
 
-  // Centralized error handler
+  // Request ID Header Propagation
+  server.addHook('onSend', async (request, reply) => {
+    reply.header('x-request-id', request.id);
+  });
+
+  // Centralized Error Handler
   server.setErrorHandler((error, request, reply) => {
-    request.log.error(error);
-    const statusCode = error.statusCode || 500;
+    let statusCode = error.statusCode || 500;
+    let code = error.code || 'INTERNAL_SERVER_ERROR';
+    let message = error.message || 'An unexpected error occurred';
+    let details: any = undefined;
+
+    // Prisma error mappings
+    if (code === 'P2002') {
+      statusCode = 409;
+      code = 'CONFLICT';
+      message = 'A record with this unique identifier already exists';
+    } else if (code === 'P2025') {
+      statusCode = 404;
+      code = 'NOT_FOUND';
+      message = 'Requested record not found';
+    }
+
+    // Fastify / Zod validation error mappings
+    if (error.validation || (error as any).issues) {
+      statusCode = 400;
+      code = 'VALIDATION_ERROR';
+      message = error.message;
+      details = (error as any).issues || error.validation;
+    }
+
+    // In production, mask unhandled 500 server errors
+    if (statusCode >= 500) {
+      monitoring.captureException(error, {
+        requestId: request.id,
+        url: request.url,
+        method: request.method,
+      });
+
+      if (process.env.NODE_ENV === 'production') {
+        message = 'An unexpected internal server error occurred';
+      }
+    }
+
     reply.status(statusCode).send({
       success: false,
       error: {
-        code: error.code || 'INTERNAL_SERVER_ERROR',
-        message: error.message || 'An unexpected error occurred',
+        code,
+        message,
+        details,
       },
       meta: {
         timestamp: new Date().toISOString(),
@@ -87,23 +138,19 @@ export function buildServer() {
   return server;
 }
 
-const server = buildServer();
-
-const start = async () => {
-  try {
-    const port = Number(process.env.PORT) || 4000;
-    const host = process.env.HOST || '0.0.0.0';
-    await server.listen({ port, host });
-    server.log.info(`🚀 HireFlow API server listening at http://${host}:${port}`);
-  } catch (err) {
-    server.log.error(err);
-    process.exit(1);
-  }
-};
-
 // Start if executed directly
 if (process.argv[1]?.endsWith('server.ts') || process.argv[1]?.endsWith('server.js')) {
+  const server = buildServer();
+  const start = async () => {
+    try {
+      const port = Number(process.env.PORT) || 4000;
+      const host = process.env.HOST || '0.0.0.0';
+      await server.listen({ port, host });
+      server.log.info(`🚀 HireFlow API server listening at http://${host}:${port}`);
+    } catch (err) {
+      server.log.error(err);
+      process.exit(1);
+    }
+  };
   start();
 }
-
-export default server;
