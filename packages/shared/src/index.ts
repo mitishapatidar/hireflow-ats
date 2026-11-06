@@ -65,6 +65,9 @@ export * from './clients';
 // Jobs & Job Lifecycle Management (Prompt 10)
 export * from './jobs';
 
+// Job Pipeline (Kanban Board) & Applications (Prompt 11)
+export * from './pipeline';
+
 // Storage, Security & Resume Parsing Pipeline (Prompt 8)
 export * from './storage';
 export * from './security/antivirus';

@@ -531,6 +531,53 @@ async function main() {
   }
   console.log(`✓ Candidates verified: ${createdCandidates.length} realistic profiles seeded`);
 
+  // 5. Pipeline Stages & Rejection Reasons (Prompt 11)
+  const defaultStages = [
+    { id: 'stage-sourced', name: 'Sourced', stageType: ApplicationStatus.SOURCED, order: 1 },
+    { id: 'stage-screening', name: 'Screening', stageType: ApplicationStatus.SCREENING, order: 2 },
+    { id: 'stage-interview', name: 'Interview', stageType: ApplicationStatus.INTERVIEW, order: 3 },
+    { id: 'stage-technical', name: 'Technical', stageType: ApplicationStatus.TECHNICAL, order: 4 },
+    { id: 'stage-client-review', name: 'Client Review', stageType: ApplicationStatus.CLIENT_REVIEW, order: 5 },
+    { id: 'stage-offer', name: 'Offer', stageType: ApplicationStatus.OFFER, order: 6 },
+    { id: 'stage-placed', name: 'Placed', stageType: ApplicationStatus.PLACED, order: 7 },
+    { id: 'stage-rejected', name: 'Rejected', stageType: ApplicationStatus.REJECTED, order: 8 },
+  ];
+
+  for (const st of defaultStages) {
+    await prisma.stage.upsert({
+      where: { id: st.id },
+      update: { name: st.name, stageType: st.stageType, order: st.order, isArchived: false },
+      create: {
+        id: st.id,
+        organizationId: org.id,
+        name: st.name,
+        stageType: st.stageType,
+        order: st.order,
+        isArchived: false,
+      },
+    });
+  }
+
+  const defaultRejectionReasons = [
+    { code: 'SKILLS_MISMATCH', reason: 'Skills or Technical Competency Mismatch', category: 'QUALIFICATIONS' },
+    { code: 'EXPERIENCE_INSUFFICIENT', reason: 'Insufficient Domain/Industry Experience', category: 'QUALIFICATIONS' },
+    { code: 'SALARY_EXPECTATION', reason: 'Compensation Expectations Beyond Budget', category: 'COMPENSATION' },
+    { code: 'LOCATION_UNAVAILABLE', reason: 'Unable to Relocate or Non-Hybrid Match', category: 'LOGISTICS' },
+    { code: 'NOTICE_PERIOD', reason: 'Notice Period Too Long (> 60 Days)', category: 'TIMELINE' },
+    { code: 'OFFER_DECLINED_BY_CANDIDATE', reason: 'Candidate Declined Offer / Counter-Offer Accepted', category: 'CANDIDATE_WITHDREW' },
+    { code: 'POOR_CULTURE_FIT', reason: 'Culture & Working Style Alignment', category: 'INTERVIEW_FEEDBACK' },
+    { code: 'FAILED_BACKGROUND_CHECK', reason: 'Background Verification Discrepancy', category: 'COMPLIANCE' },
+    { code: 'OTHER', reason: 'Other / General Assessment', category: 'GENERAL' },
+  ];
+
+  for (const r of defaultRejectionReasons) {
+    await prisma.rejectionReason.upsert({
+      where: { code: r.code },
+      update: { reason: r.reason, category: r.category, isArchived: false },
+      create: { code: r.code, reason: r.reason, category: r.category, isArchived: false },
+    });
+  }
+
   // 6. Recruitment Pipeline: Applications, Stage History, Interviews, Submissions, Offers, Placement
   const candAarav = createdCandidates[0]; // C-0001
   const candPriya = createdCandidates[1]; // C-0002
@@ -544,11 +591,14 @@ async function main() {
         jobId: 'job-j201',
       },
     },
-    update: {},
+    update: {
+      stageId: 'stage-client-review',
+    },
     create: {
       id: 'app-aarav-j201',
       candidateId: candAarav.id,
       jobId: 'job-j201',
+      stageId: 'stage-client-review',
       status: ApplicationStatus.CLIENT_REVIEW,
       appliedAt: new Date(Date.now() - 7 * 24 * 3600 * 1000),
     },
@@ -637,11 +687,14 @@ async function main() {
         jobId: 'job-j207',
       },
     },
-    update: {},
+    update: {
+      stageId: 'stage-placed',
+    },
     create: {
       id: 'app-rohan-j207',
       candidateId: candRohan.id,
       jobId: 'job-j207',
+      stageId: 'stage-placed',
       status: ApplicationStatus.PLACED,
       appliedAt: new Date(Date.now() - 21 * 24 * 3600 * 1000),
     },

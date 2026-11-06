@@ -589,6 +589,14 @@ export function JobRecordClientView({
                 <span>Reopen Mandate</span>
               </button>
             )}
+
+            <Link
+              href={`/jobs/${job.id}/pipeline`}
+              className="px-3.5 py-2 border border-[#5B49D6] text-[#5B49D6] hover:bg-[#EEEBFB] rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5"
+            >
+              <Users className="w-4 h-4" />
+              <span>View Pipeline</span>
+            </Link>
           </div>
         )}
       </div>

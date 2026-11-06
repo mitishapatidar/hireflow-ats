@@ -129,6 +129,7 @@ model Organization {
   clients                Client[]
   jobs                   Job[]
   candidates             Candidate[]
+  stages                 Stage[]
   customFieldDefinitions CustomFieldDefinition[]
 
   @@index([status])
@@ -679,6 +680,26 @@ model JobReassignmentRequest {
 // MODULE E: RECRUITMENT PIPELINE
 // ==========================================
 
+model Stage {
+  id             String            @id @default(uuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId       String?
+  name           String
+  stageType      ApplicationStatus
+  order          Int
+  isArchived     Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  createdById    String?
+
+  applications   Application[]
+
+  @@index([organizationId])
+  @@index([organizationId, isArchived, order])
+  @@index([clientId])
+}
+
 model Application {
   id                String            @id @default(uuid())
   candidateId       String
@@ -686,9 +707,12 @@ model Application {
   jobId             String
   job               Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
   stageId           String?
+  stage             Stage?            @relation(fields: [stageId], references: [id], onDelete: SetNull)
   status            ApplicationStatus @default(SOURCED)
   rejectionReasonId String?
   rejectionReason   RejectionReason?  @relation(fields: [rejectionReasonId], references: [id], onDelete: SetNull)
+  rejectionFeedback String?
+  rejectedAt        DateTime?
   appliedAt         DateTime          @default(now())
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -706,6 +730,7 @@ model Application {
   @@index([stageId])
   @@index([status])
   @@index([jobId, stageId])
+  @@index([jobId, stageId, createdAt])
 }
 
 model ApplicationStageHistory {
@@ -728,6 +753,7 @@ model RejectionReason {
   code        String   @unique
   reason      String
   category    String
+  isArchived  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdById String?
@@ -735,6 +761,7 @@ model RejectionReason {
   applications Application[]
 
   @@index([category])
+  @@index([isArchived])
 }
 
 // ==========================================
