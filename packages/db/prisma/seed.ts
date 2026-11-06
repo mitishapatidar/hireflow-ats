@@ -25,14 +25,18 @@ async function main() {
   });
   console.log(`✓ Organization verified: ${org.name} (${org.id})`);
 
-  // 2. Users (Admin, Manager, Recruiters, Client)
+  // 2. Users (Admin, Manager, Recruiters, Client, Candidate)
+  const defaultPasswordHash =
+    '$argon2id$v=19$m=19456,t=2,p=1$IkRKEEEdQpOx8veyQ4SslA$MlSeBGS431c/J5Y4rUU95tdOEzDV/O/veu9ExzhszZs'; // HireFlow@2026!
+
   const admin = await prisma.user.upsert({
     where: { email: 'anika.rao@hireflow.io' },
-    update: {},
+    update: { passwordHash: defaultPasswordHash },
     create: {
       id: 'user-anika-rao',
       email: 'anika.rao@hireflow.io',
       name: 'Anika Rao',
+      passwordHash: defaultPasswordHash,
       role: UserRole.ADMIN,
       organizationId: org.id,
       status: 'ACTIVE',
@@ -42,11 +46,12 @@ async function main() {
 
   const manager = await prisma.user.upsert({
     where: { email: 'riya.desai@hireflow.io' },
-    update: {},
+    update: { passwordHash: defaultPasswordHash },
     create: {
       id: 'user-riya-desai',
       email: 'riya.desai@hireflow.io',
       name: 'Riya Desai',
+      passwordHash: defaultPasswordHash,
       role: UserRole.MANAGER,
       organizationId: org.id,
       managerId: admin.id,
@@ -68,11 +73,12 @@ async function main() {
 
   const recruiter1 = await prisma.user.upsert({
     where: { email: 'mitisha.p@hireflow.io' },
-    update: {},
+    update: { passwordHash: defaultPasswordHash },
     create: {
       id: 'user-mitisha-patidar',
       email: 'mitisha.p@hireflow.io',
       name: 'Mitisha Patidar',
+      passwordHash: defaultPasswordHash,
       role: UserRole.RECRUITER,
       organizationId: org.id,
       managerId: manager.id,
@@ -83,11 +89,12 @@ async function main() {
 
   const recruiter2 = await prisma.user.upsert({
     where: { email: 'rahul.s@hireflow.io' },
-    update: {},
+    update: { passwordHash: defaultPasswordHash },
     create: {
       id: 'user-rahul-sharma',
       email: 'rahul.s@hireflow.io',
       name: 'Rahul Sharma',
+      passwordHash: defaultPasswordHash,
       role: UserRole.RECRUITER,
       organizationId: org.id,
       managerId: manager.id,
@@ -98,11 +105,12 @@ async function main() {
 
   const recruiter3 = await prisma.user.upsert({
     where: { email: 'priya.k@hireflow.io' },
-    update: {},
+    update: { passwordHash: defaultPasswordHash },
     create: {
       id: 'user-priya-kapoor',
       email: 'priya.k@hireflow.io',
       name: 'Priya Kapoor',
+      passwordHash: defaultPasswordHash,
       role: UserRole.RECRUITER,
       organizationId: org.id,
       managerId: manager.id,
@@ -113,17 +121,66 @@ async function main() {
 
   const clientUser = await prisma.user.upsert({
     where: { email: 'priya.g@acmetech.com' },
-    update: {},
+    update: { passwordHash: defaultPasswordHash },
     create: {
       id: 'user-priya-gupta',
       email: 'priya.g@acmetech.com',
       name: 'Priya Gupta',
+      passwordHash: defaultPasswordHash,
       role: UserRole.CLIENT,
       organizationId: org.id,
       status: 'ACTIVE',
     },
   });
-  console.log('✓ Users verified: Anika Rao (Admin), Riya Desai (Manager), 3 Recruiters, 1 Client User');
+
+  const candidateUser = await prisma.user.upsert({
+    where: { email: 'aarav.shah@example.com' },
+    update: { passwordHash: defaultPasswordHash },
+    create: {
+      id: 'user-aarav-shah',
+      email: 'aarav.shah@example.com',
+      name: 'Aarav Shah',
+      passwordHash: defaultPasswordHash,
+      role: UserRole.CANDIDATE,
+      organizationId: org.id,
+      status: 'ACTIVE',
+    },
+  });
+  console.log('✓ Users verified: Anika Rao (Admin), Riya Desai (Manager), 3 Recruiters, 1 Client User, 1 Candidate User');
+
+  // Test Invitations
+  const crypto = await import('crypto');
+  const hashToken = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
+
+  await prisma.invitation.upsert({
+    where: { tokenHash: hashToken('test-invitation-token-123') },
+    update: {},
+    create: {
+      id: 'invitation-test-01',
+      email: 'newrecruiter@hireflow.io',
+      role: UserRole.RECRUITER,
+      organizationId: org.id,
+      invitedById: admin.id,
+      tokenHash: hashToken('test-invitation-token-123'),
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+    },
+  });
+
+  await prisma.invitation.upsert({
+    where: { tokenHash: hashToken('test-invitation-expired-token') },
+    update: {},
+    create: {
+      id: 'invitation-test-expired',
+      email: 'expired@hireflow.io',
+      role: UserRole.RECRUITER,
+      organizationId: org.id,
+      invitedById: admin.id,
+      tokenHash: hashToken('test-invitation-expired-token'),
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() - 24 * 3600 * 1000),
+    },
+  });
 
   // 3. Clients
   const clientAcme = await prisma.client.upsert({

@@ -47,3 +47,7 @@ export type PaginationParams = z.infer<typeof PaginationParamsSchema>;
 
 // Navigation & Permissions
 export * from './navigation';
+
+// Authentication & Centralized Authorization Engine
+export * from './auth';
+export * from './authorization';

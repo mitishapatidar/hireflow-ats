@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useDevUser } from '../../context/DevUserContext';
 import { User, LogOut, Shield, ChevronDown, Check, Building2 } from 'lucide-react';
 import Link from 'next/link';
+import { logoutAction } from '../../actions/auth';
 
 export function UserProfileDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -103,16 +104,16 @@ export function UserProfileDropdown() {
                 <User className="w-4 h-4 text-[#6B7490]" />
                 <span>Account Profile</span>
               </Link>
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  alert('Signed out of development session. Real authentication workflow arrives in Prompt 5.');
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5484D] hover:bg-[#FDECEC] rounded-lg transition-colors font-medium text-left"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out</span>
-              </button>
+              <form action={logoutAction}>
+                <button
+                  type="submit"
+                  onClick={() => setIsOpen(false)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5484D] hover:bg-[#FDECEC] rounded-lg transition-colors font-medium text-left"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </form>
             </div>
           </div>
         </>

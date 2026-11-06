@@ -89,6 +89,7 @@ export function DevUserProvider({ children }: { children: React.ReactNode }) {
       const storedRole = localStorage.getItem(STORAGE_KEY) as UserRole | null;
       if (storedRole && SEEDED_PROFILES[storedRole]) {
         setCurrentRoleState(storedRole);
+        document.cookie = `hireflow_dev_role=${storedRole}; path=/; max-age=86400`;
       }
     }
   }, []);
@@ -97,6 +98,7 @@ export function DevUserProvider({ children }: { children: React.ReactNode }) {
     setCurrentRoleState(role);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, role);
+      document.cookie = `hireflow_dev_role=${role}; path=/; max-age=86400`;
     }
     if (shouldNavigate) {
       const defaultRoute = getDefaultRouteForRole(role);

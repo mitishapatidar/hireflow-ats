@@ -150,6 +150,8 @@ model User {
   team              Team?        @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
   twoFactorEnabled  Boolean      @default(false)
   twoFactorSecret   String?
+  oauthProvider     String?
+  oauthId           String?
   lastLoginAt       DateTime?
   isArchived        Boolean      @default(false)
   createdAt         DateTime     @default(now())
@@ -178,6 +180,7 @@ model User {
   @@index([role])
   @@index([managerId])
   @@index([teamId])
+  @@index([oauthProvider, oauthId])
   @@index([isArchived])
 }
 
@@ -251,6 +254,31 @@ model ClientAccess {
   @@unique([userId, clientId])
   @@index([userId])
   @@index([clientId])
+}
+
+model PasswordResetToken {
+  id          String    @id @default(uuid())
+  email       String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  createdById String?
+
+  @@index([email])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  email     String
+  ipAddress String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, ipAddress])
+  @@index([createdAt])
 }
 
 // ==========================================

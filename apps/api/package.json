@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/cookie": "9.4.0",
+    "@fastify/cors": "9.0.1",
     "@hireflow/db": "workspace:*",
     "@hireflow/shared": "workspace:*",
     "bullmq": "^5.8.6",
