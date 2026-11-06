@@ -619,9 +619,11 @@ async function main() {
   });
   console.log(`✓ Placement closed: Rohan Mehta placed at Vertex Systems (Fee: ₹3,23,000 INR)`);
 
-  // 7. Audit Log Entry
-  await prisma.auditLog.create({
-    data: {
+  // 7. Audit Log Entry (Idempotent upsert)
+  await prisma.auditLog.upsert({
+    where: { id: 'audit-seed-init' },
+    update: {},
+    create: {
       id: 'audit-seed-init',
       actorId: admin.id,
       action: 'SYSTEM_DATABASE_SEED',
