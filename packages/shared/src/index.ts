@@ -68,6 +68,10 @@ export * from './jobs';
 // Job Pipeline (Kanban Board) & Applications (Prompt 11)
 export * from './pipeline';
 
+// Candidate-Job Match Scoring & Client Submissions (Prompt 13)
+export * from './match-scoring';
+export * from './submissions';
+
 // Storage, Security & Resume Parsing Pipeline (Prompt 8)
 export * from './storage';
 export * from './security/antivirus';

@@ -11,6 +11,7 @@ import adminRoutes from './routes/admin.js';
 import { clientRoutes } from './routes/clients.js';
 import { jobRoutes } from './routes/jobs.js';
 import { pipelineRoutes } from './routes/pipeline.js';
+import { submissionRoutes } from './routes/submissions.js';
 
 dotenv.config();
 
@@ -71,6 +72,7 @@ export function buildServer() {
   server.register(clientRoutes);
   server.register(jobRoutes);
   server.register(pipelineRoutes);
+  server.register(submissionRoutes);
 
   return server;
 }
