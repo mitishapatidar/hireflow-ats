@@ -180,6 +180,8 @@ model User {
   notifications          Notification[]
   notificationPrefs      NotificationPreference[]
   teamSignatures         TeamSignature[]
+  integrationAccounts    IntegrationAccount[]      @relation("UserIntegrationAccounts")
+  threadsAssigned        Thread[]                  @relation("ThreadAssignedRecruiter")
   dailyActivities        DailyActivity[]
   clientsOwned           Client[]                  @relation("ClientOwner")
   opportunitiesOwned     Opportunity[]             @relation("OpportunityOwner")
@@ -313,6 +315,10 @@ model Candidate {
   organizationId    String
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   consentRecordedAt DateTime?
+  whatsappOptIn     Boolean      @default(true)
+  whatsappOptInAt   DateTime?
+  smsOptIn          Boolean      @default(false)
+  smsOptInAt        DateTime?
   isArchived        Boolean      @default(false)
   archivedAt        DateTime?
   archivedById      String?
@@ -325,6 +331,8 @@ model Candidate {
   tags         CandidateTag[]
   documents    CandidateDocument[]
   applications Application[]
+  threads      Thread[]
+  activities   CandidateActivity[]
 
   @@index([organizationId])
   @@index([ownerId])
@@ -595,6 +603,7 @@ model Job {
   statusHistories        JobStatusHistory[]
   reassignmentRequests   JobReassignmentRequest[]
   applications           Application[]
+  threads                Thread[]
 
   @@index([organizationId])
   @@index([clientId])
@@ -1068,79 +1077,143 @@ model Meeting {
 // ==========================================
 
 model Template {
-  id          String         @id @default(uuid())
-  title       String
-  channel     MessageChannel
-  subject     String?
-  body        String
-  variables   String[]       @default([])
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  createdById String?
+  id                    String         @id @default(uuid())
+  title                 String
+  channel               MessageChannel
+  subject               String?
+  body                  String
+  variables             String[]       @default([])
+  category              String         @default("OUTREACH")
+  status                String         @default("PUBLISHED")
+  providerApprovalState String         @default("DRAFT")
+  providerTemplateId    String?
+  language              String         @default("en")
+  organizationId        String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  createdById           String?
+
+  messages              Message[]
 
   @@index([channel])
+  @@index([category])
+  @@index([status])
 }
 
 model TeamSignature {
-  id            String   @id @default(uuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  signatureHtml String
-  isDefault     Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  createdById   String?
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signatureHtml  String
+  isDefault      Boolean  @default(true)
+  organizationId String?
+  designation    String?
+  companyName    String?
+  phone          String?
+  logoUrl        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdById    String?
 
   @@index([userId])
 }
 
 model Thread {
-  id          String         @id @default(uuid())
-  channel     MessageChannel
-  subject     String?
-  candidateId String?
-  clientId    String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  createdById String?
+  id                  String         @id @default(uuid())
+  channel             MessageChannel
+  subject             String?
+  candidateId         String?
+  candidate           Candidate?     @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  clientId            String?
+  jobId               String?
+  job                 Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  assignedRecruiterId String?
+  assignedRecruiter   User?          @relation("ThreadAssignedRecruiter", fields: [assignedRecruiterId], references: [id], onDelete: SetNull)
+  unreadCount         Int            @default(0)
+  lastMessageAt       DateTime       @default(now())
+  isArchived          Boolean        @default(false)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  createdById         String?
 
-  messages Message[]
+  messages            Message[]
 
   @@index([candidateId])
   @@index([clientId])
+  @@index([jobId])
+  @@index([assignedRecruiterId])
+  @@index([channel])
+  @@index([lastMessageAt])
 }
 
 model Message {
-  id          String           @id @default(uuid())
-  threadId    String
-  thread      Thread           @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  channel     MessageChannel
-  direction   MessageDirection
-  status      String           @default("SENT")
-  sender      String
-  recipient   String
-  body        String
-  sentAt      DateTime         @default(now())
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  createdById String?
+  id                String           @id @default(uuid())
+  threadId          String
+  thread            Thread           @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  channel           MessageChannel
+  direction         MessageDirection
+  status            String           @default("SENT")
+  sender            String
+  recipient         String
+  body              String
+  providerMessageId String?
+  deliveryStatus    String           @default("SENT")
+  templateId        String?
+  template          Template?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  attachments       Json?
+  errorMessage      String?
+  metadata          Json?
+  sentAt            DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  createdById       String?
 
   @@index([threadId])
   @@index([channel])
   @@index([sentAt])
+  @@index([providerMessageId])
+  @@index([deliveryStatus])
 }
 
 model IntegrationAccount {
-  id              String   @id @default(uuid())
-  provider        String
-  encryptedTokens String
-  scopes          String[] @default([])
-  status          String   @default("ACTIVE")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  createdById     String?
+  id                String    @id @default(uuid())
+  userId            String?
+  user              User?     @relation("UserIntegrationAccounts", fields: [userId], references: [id], onDelete: Cascade)
+  provider          String
+  email             String?
+  accountIdentifier String?
+  encryptedTokens   String
+  scopes            String[]  @default([])
+  status            String    @default("ACTIVE")
+  connectionState   String    @default("SETUP_REQUIRED")
+  expiresAt         DateTime?
+  lastRefreshedAt   DateTime?
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdById       String?
 
+  @@index([userId])
   @@index([provider])
+  @@index([connectionState])
+}
+
+model CandidateActivity {
+  id          String           @id @default(uuid())
+  candidateId String
+  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  type        String
+  channel     MessageChannel?
+  direction   MessageDirection?
+  title       String
+  description String?
+  metadata    Json?
+  actorId     String?
+  createdAt   DateTime         @default(now())
+
+  @@index([candidateId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 model AutomationRule {

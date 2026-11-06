@@ -58,6 +58,15 @@ export const INTERNAL_NAVIGATION_ITEMS: NavigationItem[] = [
     description: 'Scheduled candidate interviews and calendar sync',
   },
   {
+    id: 'communications',
+    label: 'Communications',
+    path: '/communications',
+    icon: 'MessageSquare',
+    allowedRoles: [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
+    section: 'WORKSPACE',
+    description: 'Candidate inbox, WhatsApp messaging, and templates',
+  },
+  {
     id: 'submissions',
     label: 'Submissions',
     path: '/submissions',
@@ -138,6 +147,15 @@ export const INTERNAL_NAVIGATION_ITEMS: NavigationItem[] = [
     allowedRoles: [UserRole.MANAGER, UserRole.ADMIN],
     section: 'SYSTEM',
     description: 'System configurations, permissions, team setup, and audit logs',
+  },
+  {
+    id: 'integrations',
+    label: 'Integrations',
+    path: '/integrations',
+    icon: 'Shield',
+    allowedRoles: [UserRole.MANAGER, UserRole.ADMIN, UserRole.RECRUITER],
+    section: 'SYSTEM',
+    description: 'Gmail, Outlook, WhatsApp, and SMS provider integrations',
   },
 ];
 

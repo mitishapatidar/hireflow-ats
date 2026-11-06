@@ -29,6 +29,7 @@ import {
   LogOut,
   FolderKanban,
   FileText,
+  MessageSquare,
   LucideProps,
 } from 'lucide-react';
 
@@ -60,6 +61,7 @@ export const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   LogOut,
   FolderKanban,
   FileText,
+  MessageSquare,
 };
 
 interface NavIconProps extends LucideProps {

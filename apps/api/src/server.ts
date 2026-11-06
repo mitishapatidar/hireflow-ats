@@ -13,6 +13,7 @@ import { jobRoutes } from './routes/jobs.js';
 import { pipelineRoutes } from './routes/pipeline.js';
 import { submissionRoutes } from './routes/submissions.js';
 import { interviewRoutes } from './routes/interviews.js';
+import { communicationRoutes } from './routes/communications.js';
 
 dotenv.config();
 
@@ -75,6 +76,7 @@ export function buildServer() {
   server.register(pipelineRoutes);
   server.register(submissionRoutes);
   server.register(interviewRoutes, { prefix: '/api/interviews' });
+  server.register(communicationRoutes, { prefix: '/api/communications' });
 
   return server;
 }
