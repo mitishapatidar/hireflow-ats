@@ -425,6 +425,9 @@ model Client {
   status              ClientStatus  @default(PROSPECT)
   commercialTerms     String?
   feePercentage       Decimal?      @db.Decimal(5, 2)
+  paymentTerms        String?       @default("NET_30")
+  relationshipNotes   String?
+  nextStep            String?
   isArchived          Boolean       @default(false)
   archivedAt          DateTime?
   archiveReason       String?
@@ -469,19 +472,27 @@ model ClientContact {
 }
 
 model ClientDocument {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   clientId      String
-  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   fileName      String
   fileUrl       String
-  storageBucket String   @default("client-documents")
+  storageKey    String?
+  storageBucket String    @default("client-documents")
   documentType  String
-  version       Int      @default(1)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  version       Int       @default(1)
+  fileSize      Int?      @default(0)
+  mimeType      String?   @default("application/pdf")
+  checksum      String?
+  isVerified    Boolean   @default(false)
+  verifiedById  String?
+  verifiedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   createdById   String?
 
   @@index([clientId])
+  @@index([isVerified])
 }
 
 model ClientWorkflow {
@@ -887,19 +898,23 @@ model Opportunity {
 }
 
 model Meeting {
-  id          String   @id @default(uuid())
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  organizerId String
-  title       String
-  scheduledAt DateTime
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdById String?
+  id           String    @id @default(uuid())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  organizerId  String
+  title        String
+  meetingType  String?   @default("CLIENT_CHECK_IN")
+  status       String?   @default("SCHEDULED")
+  scheduledAt  DateTime
+  participants String[]  @default([])
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdById  String?
 
   @@index([clientId])
   @@index([organizerId])
+  @@index([scheduledAt])
 }
 
 // ==========================================

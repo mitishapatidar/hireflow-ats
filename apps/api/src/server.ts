@@ -8,6 +8,7 @@ import authPlugin from './plugins/auth.js';
 import authRoutes from './routes/auth.js';
 import candidateRoutes from './routes/candidates.js';
 import adminRoutes from './routes/admin.js';
+import { clientRoutes } from './routes/clients.js';
 
 dotenv.config();
 
@@ -65,6 +66,7 @@ export function buildServer() {
   server.register(authRoutes);
   server.register(candidateRoutes);
   server.register(adminRoutes);
+  server.register(clientRoutes);
 
   return server;
 }
