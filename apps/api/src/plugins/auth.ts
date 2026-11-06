@@ -91,6 +91,9 @@ const authPlugin: FastifyPluginAsync = async (server) => {
           }
         : null;
 
+      const orgSettings = (user.organization?.settings as any) || {};
+      const grants = orgSettings.permissionGrants || {};
+
       const authUser: AuthUser = {
         id: user.id,
         email: user.email,
@@ -102,6 +105,7 @@ const authPlugin: FastifyPluginAsync = async (server) => {
         status: user.status,
         subordinateIds,
         clientAccess,
+        grants,
       };
 
       request.user = authUser;

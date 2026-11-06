@@ -7,6 +7,7 @@ import csrfPlugin from './plugins/csrf.js';
 import authPlugin from './plugins/auth.js';
 import authRoutes from './routes/auth.js';
 import candidateRoutes from './routes/candidates.js';
+import adminRoutes from './routes/admin.js';
 
 dotenv.config();
 
@@ -63,6 +64,7 @@ export function buildServer() {
   server.register(healthRoute);
   server.register(authRoutes);
   server.register(candidateRoutes);
+  server.register(adminRoutes);
 
   return server;
 }

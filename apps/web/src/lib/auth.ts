@@ -82,6 +82,9 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       }
     : null;
 
+  const orgSettings = (user.organization?.settings as Record<string, unknown>) || {};
+  const grants = (orgSettings.permissionGrants as Record<string, boolean>) || {};
+
   return {
     id: user.id,
     email: user.email,
@@ -93,6 +96,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     status: user.status,
     subordinateIds,
     clientAccess,
+    grants,
   };
 }
 

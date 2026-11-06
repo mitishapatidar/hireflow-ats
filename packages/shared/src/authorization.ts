@@ -34,6 +34,7 @@ export interface AuthUser {
     authorizedJobIds: string[];
   } | null;
   candidateProfileId?: string | null;
+  grants?: Record<string, boolean>;
 }
 
 export interface AuthResource {
@@ -90,10 +91,14 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         resource.type === 'organization' ||
         resource.type === 'user' ||
         resource.type === 'invitation' ||
-        resource.type === 'audit_log' ||
-        resource.type === 'commercial_terms'
+        resource.type === 'audit_log'
       ) {
         return false;
+      }
+
+      // Internal fees / commercial terms: by explicit grant only
+      if (resource.type === 'commercial_terms') {
+        return !!user.grants?.recruiterViewInternalFees && action === 'read';
       }
 
       // Submission approval cannot be self-approved by recruiter
