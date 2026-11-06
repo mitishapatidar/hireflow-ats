@@ -35,6 +35,8 @@ export interface AuthUser {
   } | null;
   candidateProfileId?: string | null;
   grants?: Record<string, boolean>;
+  sessionId?: string;
+  lastReverifiedAt?: Date | null;
 }
 
 export interface AuthResource {

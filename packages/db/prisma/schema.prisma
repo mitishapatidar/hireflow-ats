@@ -137,6 +137,8 @@ model Organization {
   customFieldDefinitions CustomFieldDefinition[]
   opportunities          Opportunity[]
   recruiterTargets       RecruiterTarget[]
+  securityPolicy         SecurityPolicy?
+  otpChallenges          OtpChallenge[]
 
   @@index([status])
 }
@@ -192,6 +194,7 @@ model User {
   meetingsOrganized      Meeting[]                 @relation("MeetingOrganizer")
   recruiterActivities    RecruiterActivity[]       @relation("RecruiterLoggedActivities")
   recruiterTargets       RecruiterTarget[]         @relation("RecruiterTargets")
+  otpChallenges          OtpChallenge[]
 
   @@index([organizationId])
   @@index([role])
@@ -218,20 +221,67 @@ model Team {
 }
 
 model Session {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash   String    @unique
-  deviceInfo  String?
-  ipAddress   String?
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdById String?
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash        String    @unique
+  deviceInfo       String?
+  ipAddress        String?
+  expiresAt        DateTime
+  lastActivityAt   DateTime  @default(now())
+  lastReverifiedAt DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  createdById      String?
 
   @@index([userId])
   @@index([tokenHash])
+  @@index([expiresAt])
+  @@index([lastActivityAt])
+}
+
+model SecurityPolicy {
+  id                                   String       @id @default(uuid())
+  organizationId                       String       @unique
+  organization                         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  allowedAuthMethods                   String[]     @default(["EMAIL_PASSWORD", "GOOGLE"])
+  allowedEmailDomains                  String[]     @default([])
+  requireTwoStepVerification           Boolean      @default(true)
+  otpDeliveryMethod                    String       @default("EMAIL")
+  otpExpirySeconds                     Int          @default(300)
+  otpResendCooldownSeconds             Int          @default(30)
+  otpMaxAttempts                       Int          @default(3)
+  maxConcurrentSessions                Int          @default(2)
+  inactivityTimeoutMinutes             Int          @default(30)
+  warningBeforeExpiryMinutes           Int          @default(5)
+  sensitiveActionReverificationMinutes Int          @default(15)
+  clientAccessPolicy                   Json?
+  updatedById                          String?
+  createdAt                            DateTime     @default(now())
+  updatedAt                            DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+model OtpChallenge {
+  id                String       @id @default(uuid())
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  challengeHash     String       @unique
+  otpHashed         String
+  expiresAt         DateTime
+  attempts          Int          @default(0)
+  resendAvailableAt DateTime
+  consumedAt        DateTime?
+  revokedAt         DateTime?
+  actionContext     String       @default("LOGIN")
+  createdAt         DateTime     @default(now())
+
+  @@index([userId])
+  @@index([challengeHash])
   @@index([expiresAt])
 }
 

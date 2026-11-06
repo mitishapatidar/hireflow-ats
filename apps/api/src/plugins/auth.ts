@@ -15,6 +15,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     user?: AuthUser;
     sessionId?: string;
+    session?: any;
   }
 }
 
@@ -58,7 +59,7 @@ const authPlugin: FastifyPluginAsync = async (server) => {
         },
       });
 
-      // 3. Validate session existence and expiry
+      // 3. Validate session existence and absolute expiry
       if (!session || session.revokedAt || new Date() > session.expiresAt) {
         return reply.status(401).send({
           success: false,
@@ -67,6 +68,37 @@ const authPlugin: FastifyPluginAsync = async (server) => {
             message: 'Your session has expired or has been revoked. Please sign in again.',
           },
         });
+      }
+
+      // 4. Server-Enforced Inactivity Auto-Logout
+      const policy = await prisma.securityPolicy.findUnique({
+        where: { organizationId: session.user.organizationId },
+      });
+      const timeoutMinutes = policy?.inactivityTimeoutMinutes ?? 30;
+      const timeoutMs = timeoutMinutes * 60 * 1000;
+      const now = Date.now();
+      const lastActivity = session.lastActivityAt ? session.lastActivityAt.getTime() : session.createdAt.getTime();
+
+      if (now - lastActivity > timeoutMs) {
+        await prisma.session.update({
+          where: { id: session.id },
+          data: { revokedAt: new Date() },
+        });
+        return reply.status(401).send({
+          success: false,
+          error: {
+            code: 'SESSION_EXPIRED',
+            message: 'Your session has expired due to inactivity. Please sign in again.',
+          },
+        });
+      }
+
+      // Throttled update of lastActivityAt (at most once every 60 seconds to prevent DB churn)
+      if (now - lastActivity > 60 * 1000) {
+        prisma.session.update({
+          where: { id: session.id },
+          data: { lastActivityAt: new Date() },
+        }).catch(() => {});
       }
 
       const user = session.user;
@@ -110,9 +142,35 @@ const authPlugin: FastifyPluginAsync = async (server) => {
 
       request.user = authUser;
       request.sessionId = session.id;
+      request.session = session;
     }
   );
 };
+
+// Reusable Helper: Enforce Recent Sensitive-Action Re-verification
+export function requireReverification(maxMinutes: number = 15) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user || !request.session) {
+      return reply.status(401).send({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+      });
+    }
+
+    const lastReverified = request.session.lastReverifiedAt ? new Date(request.session.lastReverifiedAt).getTime() : 0;
+    const maxWindowMs = maxMinutes * 60 * 1000;
+
+    if (Date.now() - lastReverified > maxWindowMs) {
+      return reply.status(403).send({
+        success: false,
+        error: {
+          code: 'REVERIFICATION_REQUIRED',
+          message: 'Sensitive operation requires recent re-verification. Please confirm your credentials.',
+        },
+      });
+    }
+  };
+}
 
 // Reusable Helper: Enforce Role
 export function requireRole(...allowedRoles: UserRole[]) {

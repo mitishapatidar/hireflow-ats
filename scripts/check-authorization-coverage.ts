@@ -34,10 +34,16 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'POST', url: '/api/auth/invitation/accept', isPublic: true, publicReason: 'New user onboarding activation' },
   { method: 'POST', url: '/api/auth/password-reset/request', isPublic: true, publicReason: 'Password reset request' },
   { method: 'POST', url: '/api/auth/password-reset/confirm', isPublic: true, publicReason: 'Password reset token verification' },
+  { method: 'POST', url: '/api/auth/otp/verify', isPublic: true, publicReason: 'Two-step verification challenge response' },
+  { method: 'POST', url: '/api/auth/otp/resend', isPublic: true, publicReason: 'Two-step verification code resend' },
 
   // Auth Protected Endpoints
   { method: 'POST', url: '/api/auth/logout', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
   { method: 'GET', url: '/api/auth/me', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
+  { method: 'GET', url: '/api/auth/sessions', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
+  { method: 'DELETE', url: '/api/auth/sessions/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
+  { method: 'POST', url: '/api/auth/sessions/revoke-others', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
+  { method: 'POST', url: '/api/auth/reauthenticate', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
 
   // Admin & Settings (Admin & Manager)
   { method: 'GET', url: '/api/admin/members', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
@@ -47,6 +53,8 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'GET', url: '/api/admin/client-access', isPublic: false, allowedRoles: [UserRole.ADMIN] },
   { method: 'GET', url: '/api/admin/invitations', isPublic: false, allowedRoles: [UserRole.ADMIN] },
   { method: 'PATCH', url: '/api/admin/permissions/grant', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'GET', url: '/api/admin/security/policies', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'PATCH', url: '/api/admin/security/policies', isPublic: false, allowedRoles: [UserRole.ADMIN] },
 
   // Candidates (Internal Staff Only)
   { method: 'GET', url: '/api/candidates', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },

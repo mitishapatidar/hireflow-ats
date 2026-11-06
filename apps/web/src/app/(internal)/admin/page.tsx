@@ -58,8 +58,8 @@ export default function AdminPage() {
       title: 'Google / email login & OTP',
       desc: 'Configure Google SSO, email login, OTP and session timeout policies.',
       icon: Key,
-      href: '/admin/team?tab=team',
-      badge: '@aurevacapital.com Enforced',
+      href: '/admin/security',
+      badge: '2FA & Policies',
     },
     {
       title: 'Integrations',

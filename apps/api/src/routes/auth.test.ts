@@ -11,16 +11,22 @@ describe('Fastify Auth & Permission Integration Tests', () => {
     server = buildServer();
     await server.ready();
 
-    // Ensure test user has known default password
+    // Ensure test user has known default password and 2FA disabled for base auth tests
     const defaultPasswordHash =
       '$argon2id$v=19$m=19456,t=2,p=1$IkRKEEEdQpOx8veyQ4SslA$MlSeBGS431c/J5Y4rUU95tdOEzDV/O/veu9ExzhszZs'; // HireFlow@2026!
     await prisma.user.updateMany({
       where: { email: { in: ['anika.rao@hireflow.io', 'rahul.s@hireflow.io', 'mitisha.p@hireflow.io'] } },
-      data: { passwordHash: defaultPasswordHash },
+      data: { passwordHash: defaultPasswordHash, twoFactorEnabled: false },
+    });
+    await prisma.securityPolicy.updateMany({
+      data: { requireTwoStepVerification: false },
     });
   });
 
   afterAll(async () => {
+    await prisma.securityPolicy.updateMany({
+      data: { requireTwoStepVerification: true },
+    });
     await server.close();
     await prisma.$disconnect();
   });

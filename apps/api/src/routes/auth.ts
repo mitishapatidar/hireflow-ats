@@ -14,10 +14,84 @@ import {
   isEmailDomainAllowed,
   SESSION_COOKIE_NAME,
   UserRole,
+  generateSecure6DigitOtp,
+  hashOtp,
+  verifyOtpHash,
+  generateChallengeToken,
+  hashChallengeToken,
+  maskEmail,
+  OtpVerifySchema,
+  OtpResendSchema,
+  ReauthenticateSchema,
+  CHALLENGE_COOKIE_NAME,
 } from '@hireflow/shared';
 import { hashPassword, verifyPassword } from '@hireflow/shared/password';
 
 const authRoutes: FastifyPluginAsync = async (server) => {
+  // -------------------------------------------------------------
+  // Helper: Resolve Organization Security Policy
+  // -------------------------------------------------------------
+  async function resolveSecurityPolicy(organizationId: string) {
+    let policy = await prisma.securityPolicy.findUnique({
+      where: { organizationId },
+    });
+    if (!policy) {
+      policy = await prisma.securityPolicy.create({
+        data: {
+          organizationId,
+          allowedAuthMethods: ['EMAIL_PASSWORD', 'GOOGLE'],
+          requireTwoStepVerification: true,
+          otpDeliveryMethod: 'EMAIL',
+          otpExpirySeconds: 300,
+          otpResendCooldownSeconds: 30,
+          otpMaxAttempts: 3,
+          maxConcurrentSessions: 2,
+          inactivityTimeoutMinutes: 30,
+        },
+      });
+    }
+    return policy;
+  }
+
+  // -------------------------------------------------------------
+  // Helper: Enforce Concurrent Session Limit Atomically
+  // -------------------------------------------------------------
+  async function enforceConcurrentSessions(userId: string, maxSessions: number) {
+    if (maxSessions <= 0) return;
+    const now = new Date();
+    const activeSessions = await prisma.session.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (activeSessions.length >= maxSessions) {
+      const toRevokeCount = activeSessions.length - maxSessions + 1;
+      const sessionsToRevoke = activeSessions.slice(0, toRevokeCount);
+      for (const s of sessionsToRevoke) {
+        await prisma.session.update({
+          where: { id: s.id },
+          data: { revokedAt: now },
+        });
+        await logSecurityEvent(userId, 'SESSION_REVOKED_CONCURRENT_LIMIT', 'Session', s.id, {
+          reason: `Exceeded max concurrent sessions limit of ${maxSessions}`,
+        });
+      }
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Helper: Dispatched Two-Factor OTP Email (Mock / Sandboxed Provider)
+  // -------------------------------------------------------------
+  async function sendOtpEmail(email: string, otp: string) {
+    if (process.env.NODE_ENV !== 'production') {
+      server.log.info({ recipient: maskEmail(email), mode: 'MOCK_DISPATCH' }, 'Simulated Two-Factor Email OTP Dispatched');
+    }
+  }
+
   // -------------------------------------------------------------
   // Helper: Log Security Audit Event
   // -------------------------------------------------------------
@@ -147,6 +221,68 @@ const authRoutes: FastifyPluginAsync = async (server) => {
       data: { email, ipAddress, success: true },
     });
 
+    // Resolve Organization Security Policy
+    const policy = await resolveSecurityPolicy(user.organizationId);
+
+    // Determine Two-Step Verification Requirement
+    const requires2FA = policy.requireTwoStepVerification || user.twoFactorEnabled;
+
+    if (requires2FA) {
+      const rawOtp = generateSecure6DigitOtp();
+      const otpHashed = hashOtp(rawOtp);
+      const challengeToken = generateChallengeToken();
+      const challengeHash = hashChallengeToken(challengeToken);
+      const expiresAt = new Date(Date.now() + (policy.otpExpirySeconds || 300) * 1000);
+      const resendAvailableAt = new Date(Date.now() + (policy.otpResendCooldownSeconds || 30) * 1000);
+
+      // Invalidate existing pending challenges for this user
+      await prisma.otpChallenge.updateMany({
+        where: {
+          userId: user.id,
+          consumedAt: null,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+
+      await prisma.otpChallenge.create({
+        data: {
+          userId: user.id,
+          organizationId: user.organizationId,
+          challengeHash,
+          otpHashed,
+          expiresAt,
+          resendAvailableAt,
+          actionContext: 'LOGIN',
+        },
+      });
+
+      await sendOtpEmail(user.email, rawOtp);
+      await logSecurityEvent(user.id, 'OTP_CHALLENGE_ISSUED', 'OtpChallenge', user.id, { method: 'EMAIL' }, ipAddress);
+
+      // Set short-lived challenge cookie (5 minutes)
+      reply.setCookie(CHALLENGE_COOKIE_NAME, challengeToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: policy.otpExpirySeconds || 300,
+      });
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          requires2FA: true,
+          challengeToken,
+          emailMasked: maskEmail(user.email),
+          resendCooldownSeconds: policy.otpResendCooldownSeconds || 30,
+        },
+      });
+    }
+
+    // Enforce Concurrent Session Limit
+    await enforceConcurrentSessions(user.id, policy.maxConcurrentSessions || 2);
+
     // Session Rotation: Invalidate any old session for this device and generate fresh token
     const rawSessionToken = generateSecureToken();
     const tokenHash = hashToken(rawSessionToken);
@@ -159,6 +295,7 @@ const authRoutes: FastifyPluginAsync = async (server) => {
         expiresAt,
         deviceInfo: (request.headers['user-agent'] as string) || 'Browser',
         ipAddress,
+        lastActivityAt: new Date(),
       },
     });
 
@@ -472,7 +609,7 @@ const authRoutes: FastifyPluginAsync = async (server) => {
       });
     }
 
-    // 4. Link Google Account & Rotate Session
+    // 4. Link Google Account
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -481,6 +618,64 @@ const authRoutes: FastifyPluginAsync = async (server) => {
         lastLoginAt: new Date(),
       },
     });
+
+    // Resolve Organization Security Policy
+    const policy = await resolveSecurityPolicy(user.organizationId);
+    const requires2FA = policy.requireTwoStepVerification || user.twoFactorEnabled;
+
+    if (requires2FA) {
+      const rawOtp = generateSecure6DigitOtp();
+      const otpHashed = hashOtp(rawOtp);
+      const challengeToken = generateChallengeToken();
+      const challengeHash = hashChallengeToken(challengeToken);
+      const expiresAt = new Date(Date.now() + (policy.otpExpirySeconds || 300) * 1000);
+      const resendAvailableAt = new Date(Date.now() + (policy.otpResendCooldownSeconds || 30) * 1000);
+
+      await prisma.otpChallenge.updateMany({
+        where: {
+          userId: user.id,
+          consumedAt: null,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+
+      await prisma.otpChallenge.create({
+        data: {
+          userId: user.id,
+          organizationId: user.organizationId,
+          challengeHash,
+          otpHashed,
+          expiresAt,
+          resendAvailableAt,
+          actionContext: 'LOGIN',
+        },
+      });
+
+      await sendOtpEmail(user.email, rawOtp);
+      await logSecurityEvent(user.id, 'OTP_CHALLENGE_ISSUED', 'OtpChallenge', user.id, { method: 'EMAIL_GOOGLE_OAUTH' }, ipAddress);
+
+      reply.setCookie(CHALLENGE_COOKIE_NAME, challengeToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: policy.otpExpirySeconds || 300,
+      });
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          requires2FA: true,
+          challengeToken,
+          emailMasked: maskEmail(user.email),
+          resendCooldownSeconds: policy.otpResendCooldownSeconds || 30,
+        },
+      });
+    }
+
+    // If 2FA not required: Enforce Concurrent Session Limit
+    await enforceConcurrentSessions(user.id, policy.maxConcurrentSessions || 2);
 
     const rawSessionToken = generateSecureToken();
     const tokenHash = hashToken(rawSessionToken);
@@ -493,6 +688,7 @@ const authRoutes: FastifyPluginAsync = async (server) => {
         expiresAt,
         deviceInfo: (request.headers['user-agent'] as string) || 'Browser/GoogleOAuth',
         ipAddress,
+        lastActivityAt: new Date(),
       },
     });
 
@@ -756,6 +952,413 @@ const authRoutes: FastifyPluginAsync = async (server) => {
       });
     }
   );
+
+  // -------------------------------------------------------------
+  // 8. POST /api/auth/otp/verify (Verify Email OTP)
+  // -------------------------------------------------------------
+  server.post('/api/auth/otp/verify', async (request, reply) => {
+    const parseResult = OtpVerifySchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid verification input',
+          details: parseResult.error.flatten(),
+        },
+      });
+    }
+
+    const { challengeToken, code } = parseResult.data;
+    const challengeHash = hashChallengeToken(challengeToken);
+    const ipAddress = (request.headers['x-forwarded-for'] as string) || request.ip || '127.0.0.1';
+
+    const challenge = await prisma.otpChallenge.findUnique({
+      where: { challengeHash },
+      include: { user: { include: { organization: true } }, organization: true },
+    });
+
+    if (!challenge || challenge.revokedAt) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'INVALID_CHALLENGE',
+          message: 'Authentication challenge is invalid or has expired. Please sign in again.',
+        },
+      });
+    }
+
+    if (challenge.consumedAt) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'CHALLENGE_ALREADY_USED',
+          message: 'This authentication challenge has already been verified.',
+        },
+      });
+    }
+
+    if (new Date() > challenge.expiresAt) {
+      await prisma.otpChallenge.update({
+        where: { id: challenge.id },
+        data: { revokedAt: new Date() },
+      });
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'OTP_EXPIRED',
+          message: 'Verification code has expired. Please request a new code.',
+        },
+      });
+    }
+
+    const policy = await resolveSecurityPolicy(challenge.organizationId);
+
+    // Max attempts check
+    if (challenge.attempts >= policy.otpMaxAttempts) {
+      await prisma.otpChallenge.update({
+        where: { id: challenge.id },
+        data: { revokedAt: new Date() },
+      });
+      await logSecurityEvent(challenge.userId, 'OTP_MAX_ATTEMPTS_EXCEEDED', 'OtpChallenge', challenge.id, {}, ipAddress);
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'MAX_ATTEMPTS_EXCEEDED',
+          message: 'Maximum verification attempts exceeded. Please sign in again to receive a fresh code.',
+        },
+      });
+    }
+
+    // Verify OTP timing-safe
+    const isValid = verifyOtpHash(code, challenge.otpHashed);
+    if (!isValid) {
+      const updatedAttempts = challenge.attempts + 1;
+      const isLocked = updatedAttempts >= policy.otpMaxAttempts;
+      await prisma.otpChallenge.update({
+        where: { id: challenge.id },
+        data: {
+          attempts: updatedAttempts,
+          revokedAt: isLocked ? new Date() : null,
+        },
+      });
+
+      await logSecurityEvent(challenge.userId, 'OTP_VERIFICATION_FAILED', 'OtpChallenge', challenge.id, {
+        attempts: updatedAttempts,
+        maxAttempts: policy.otpMaxAttempts,
+      }, ipAddress);
+
+      return reply.status(isLocked ? 429 : 401).send({
+        success: false,
+        error: {
+          code: isLocked ? 'OTP_MAX_ATTEMPTS_EXCEEDED' : 'INVALID_OTP',
+          message: isLocked
+            ? 'Maximum verification attempts exceeded. Please sign in again.'
+            : `Incorrect verification code. ${policy.otpMaxAttempts - updatedAttempts} attempt(s) remaining.`,
+          remainingAttempts: Math.max(0, policy.otpMaxAttempts - updatedAttempts),
+        },
+      });
+    }
+
+    // OTP verified! Mark challenge consumed
+    await prisma.otpChallenge.update({
+      where: { id: challenge.id },
+      data: { consumedAt: new Date() },
+    });
+
+    // Enforce concurrent session limit atomically
+    await enforceConcurrentSessions(challenge.userId, policy.maxConcurrentSessions);
+
+    // Create authenticated session
+    const rawSessionToken = generateSecureToken();
+    const tokenHash = hashToken(rawSessionToken);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+
+    const session = await prisma.session.create({
+      data: {
+        userId: challenge.userId,
+        tokenHash,
+        expiresAt,
+        deviceInfo: (request.headers['user-agent'] as string) || 'Browser/2FA',
+        ipAddress,
+        lastActivityAt: new Date(),
+        lastReverifiedAt: new Date(),
+      },
+    });
+
+    await prisma.user.update({
+      where: { id: challenge.userId },
+      data: { lastLoginAt: new Date() },
+    });
+
+    // Issue session cookie and clear challenge cookie
+    const cookieOpts = getSessionCookieOptions(rawSessionToken, false);
+    reply.setCookie(cookieOpts.name, cookieOpts.value, {
+      httpOnly: cookieOpts.httpOnly,
+      secure: cookieOpts.secure,
+      sameSite: cookieOpts.sameSite,
+      path: cookieOpts.path,
+      maxAge: cookieOpts.maxAge,
+    });
+
+    reply.setCookie(CHALLENGE_COOKIE_NAME, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 0,
+    });
+
+    await logSecurityEvent(challenge.userId, 'OTP_VERIFICATION_SUCCESS', 'Session', session.id, {}, ipAddress);
+
+    const user = challenge.user;
+    return reply.status(200).send({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          organizationId: user.organizationId,
+          organizationName: user.organization.name,
+        },
+        token: rawSessionToken,
+        redirectTo: getPostLoginRedirect(user.role as UserRole),
+      },
+    });
+  });
+
+  // -------------------------------------------------------------
+  // 9. POST /api/auth/otp/resend (Resend Verification Code with 30s Cooldown)
+  // -------------------------------------------------------------
+  server.post('/api/auth/otp/resend', async (request, reply) => {
+    const parseResult = OtpResendSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Missing challenge token' },
+      });
+    }
+
+    const { challengeToken } = parseResult.data;
+    const challengeHash = hashChallengeToken(challengeToken);
+    const ipAddress = (request.headers['x-forwarded-for'] as string) || request.ip || '127.0.0.1';
+
+    const challenge = await prisma.otpChallenge.findUnique({
+      where: { challengeHash },
+      include: { user: true, organization: true },
+    });
+
+    if (!challenge || challenge.revokedAt || challenge.consumedAt) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_CHALLENGE', message: 'Challenge is invalid or has already been used.' },
+      });
+    }
+
+    const policy = await resolveSecurityPolicy(challenge.organizationId);
+    const now = Date.now();
+
+    if (now < challenge.resendAvailableAt.getTime()) {
+      const waitSeconds = Math.ceil((challenge.resendAvailableAt.getTime() - now) / 1000);
+      return reply.status(429).send({
+        success: false,
+        error: {
+          code: 'RESEND_COOLDOWN_ACTIVE',
+          message: `Please wait ${waitSeconds} seconds before requesting another verification code.`,
+          retryAfter: waitSeconds,
+        },
+      });
+    }
+
+    // Generate new OTP & refresh challenge
+    const rawOtp = generateSecure6DigitOtp();
+    const otpHashed = hashOtp(rawOtp);
+    const expiresAt = new Date(Date.now() + (policy.otpExpirySeconds || 300) * 1000);
+    const resendAvailableAt = new Date(Date.now() + (policy.otpResendCooldownSeconds || 30) * 1000);
+
+    await prisma.otpChallenge.update({
+      where: { id: challenge.id },
+      data: {
+        otpHashed,
+        expiresAt,
+        resendAvailableAt,
+        attempts: 0,
+      },
+    });
+
+    await sendOtpEmail(challenge.user.email, rawOtp);
+    await logSecurityEvent(challenge.userId, 'OTP_RESENT', 'OtpChallenge', challenge.id, {}, ipAddress);
+
+    return reply.status(200).send({
+      success: true,
+      data: {
+        message: 'New verification code dispatched to your work email.',
+        resendCooldownSeconds: policy.otpResendCooldownSeconds || 30,
+      },
+    });
+  });
+
+  // -------------------------------------------------------------
+  // 10. GET /api/auth/sessions (Active Sessions List)
+  // -------------------------------------------------------------
+  server.get('/api/auth/sessions', { preHandler: [(server as any).authenticate] }, async (request, reply) => {
+    const user = request.user!;
+    const now = new Date();
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        userId: user.id,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      orderBy: { lastActivityAt: 'desc' },
+      select: {
+        id: true,
+        deviceInfo: true,
+        ipAddress: true,
+        createdAt: true,
+        lastActivityAt: true,
+      },
+    });
+
+    const data = sessions.map((s) => ({
+      ...s,
+      isCurrent: s.id === request.sessionId,
+    }));
+
+    return reply.status(200).send({
+      success: true,
+      data: { sessions: data },
+    });
+  });
+
+  // -------------------------------------------------------------
+  // 11. DELETE /api/auth/sessions/:id (Revoke Session)
+  // -------------------------------------------------------------
+  server.delete('/api/auth/sessions/:id', { preHandler: [(server as any).authenticate] }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+
+    const targetSession = await prisma.session.findUnique({
+      where: { id },
+    });
+
+    if (!targetSession || targetSession.userId !== user.id) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Session not found' },
+      });
+    }
+
+    await prisma.session.update({
+      where: { id },
+      data: { revokedAt: new Date() },
+    });
+
+    await logSecurityEvent(user.id, 'SESSION_REVOKED', 'Session', id, {
+      isCurrent: id === request.sessionId,
+    });
+
+    if (id === request.sessionId) {
+      const clearOpts = getClearSessionCookieOptions();
+      reply.setCookie(clearOpts.name, clearOpts.value, {
+        httpOnly: clearOpts.httpOnly,
+        secure: clearOpts.secure,
+        sameSite: clearOpts.sameSite,
+        path: clearOpts.path,
+        maxAge: clearOpts.maxAge,
+      });
+    }
+
+    return reply.status(200).send({
+      success: true,
+      data: { message: 'Session successfully revoked' },
+    });
+  });
+
+  // -------------------------------------------------------------
+  // 12. POST /api/auth/sessions/revoke-others (Revoke All Other Sessions)
+  // -------------------------------------------------------------
+  server.post('/api/auth/sessions/revoke-others', { preHandler: [(server as any).authenticate] }, async (request, reply) => {
+    const user = request.user!;
+    const currentSessionId = request.sessionId!;
+
+    const result = await prisma.session.updateMany({
+      where: {
+        userId: user.id,
+        revokedAt: null,
+        id: { not: currentSessionId },
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    await logSecurityEvent(user.id, 'OTHER_SESSIONS_REVOKED', 'User', user.id, {
+      revokedCount: result.count,
+    });
+
+    return reply.status(200).send({
+      success: true,
+      data: {
+        message: `Successfully revoked ${result.count} other session(s).`,
+        revokedCount: result.count,
+      },
+    });
+  });
+
+  // -------------------------------------------------------------
+  // 13. POST /api/auth/reauthenticate (Sensitive-Action Re-Verification)
+  // -------------------------------------------------------------
+  server.post('/api/auth/reauthenticate', { preHandler: [(server as any).authenticate] }, async (request, reply) => {
+    const user = request.user!;
+    const currentSessionId = request.sessionId!;
+    const parseResult = ReauthenticateSchema.safeParse(request.body);
+
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Password is required' },
+      });
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true },
+    });
+
+    if (!dbUser || !dbUser.passwordHash) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'NO_PASSWORD_SET', message: 'No password is configured for this account' },
+      });
+    }
+
+    const isMatch = await verifyPassword(dbUser.passwordHash, parseResult.data.password);
+    if (!isMatch) {
+      await logSecurityEvent(user.id, 'REAUTHENTICATION_FAILED', 'Session', currentSessionId);
+      return reply.status(401).send({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'Incorrect password. Re-authentication failed.' },
+      });
+    }
+
+    const now = new Date();
+    await prisma.session.update({
+      where: { id: currentSessionId },
+      data: { lastReverifiedAt: now },
+    });
+
+    await logSecurityEvent(user.id, 'SENSITIVE_ACTION_REAUTHENTICATED', 'Session', currentSessionId);
+
+    return reply.status(200).send({
+      success: true,
+      data: {
+        reverifiedAt: now,
+        reverifiedUntil: new Date(now.getTime() + 15 * 60 * 1000),
+      },
+    });
+  });
 };
 
 export default authRoutes;

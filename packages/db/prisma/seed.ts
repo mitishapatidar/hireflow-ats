@@ -25,6 +25,27 @@ async function main() {
   });
   console.log(`✓ Organization verified: ${org.name} (${org.id})`);
 
+  // 1b. Organization Security Policy
+  await prisma.securityPolicy.upsert({
+    where: { organizationId: org.id },
+    update: {},
+    create: {
+      organizationId: org.id,
+      allowedAuthMethods: ['EMAIL_PASSWORD', 'GOOGLE'],
+      allowedEmailDomains: [],
+      requireTwoStepVerification: true,
+      otpDeliveryMethod: 'EMAIL',
+      otpExpirySeconds: 300,
+      otpResendCooldownSeconds: 30,
+      otpMaxAttempts: 3,
+      maxConcurrentSessions: 2,
+      inactivityTimeoutMinutes: 30,
+      warningBeforeExpiryMinutes: 5,
+      sensitiveActionReverificationMinutes: 15,
+    },
+  });
+  console.log(`✓ Security Policy initialized for: ${org.name}`);
+
   // 2. Users (Admin, Manager, Recruiters, Client, Candidate)
   const defaultPasswordHash =
     '$argon2id$v=19$m=19456,t=2,p=1$IkRKEEEdQpOx8veyQ4SslA$MlSeBGS431c/J5Y4rUU95tdOEzDV/O/veu9ExzhszZs'; // HireFlow@2026!

@@ -14,8 +14,9 @@ import {
   InviteClientUserSchema,
   UpdateClientAccessSchema,
   UpdatePermissionGrantSchema,
+  UpdateSecurityPolicySchema,
 } from '@hireflow/shared';
-import { requireRole } from '../plugins/auth.js';
+import { requireRole, requireReverification } from '../plugins/auth.js';
 
 const adminRoutes: FastifyPluginAsync = async (server) => {
   // Helper: Log Admin Audit Event
@@ -531,6 +532,148 @@ const adminRoutes: FastifyPluginAsync = async (server) => {
           grantKey,
           enabled,
           message: `Permission grant '${grantKey}' updated to ${enabled}.`,
+        },
+      });
+    }
+  );
+
+  // ==========================================
+  // 6. SECURITY POLICIES (Prompt 17)
+  // ==========================================
+
+  // GET /api/admin/security/policies (Retrieve Organization Security Policy)
+  server.get(
+    '/api/admin/security/policies',
+    {
+      preHandler: [(server as any).authenticate, requireRole(UserRole.ADMIN)],
+    },
+    async (request, reply) => {
+      const admin = request.user!;
+
+      let policy = await prisma.securityPolicy.findUnique({
+        where: { organizationId: admin.organizationId },
+      });
+
+      if (!policy) {
+        policy = await prisma.securityPolicy.create({
+          data: {
+            organizationId: admin.organizationId,
+            allowedAuthMethods: ['EMAIL_PASSWORD', 'GOOGLE'],
+            requireTwoStepVerification: true,
+            otpDeliveryMethod: 'EMAIL',
+            otpExpirySeconds: 300,
+            otpResendCooldownSeconds: 30,
+            otpMaxAttempts: 3,
+            maxConcurrentSessions: 2,
+            inactivityTimeoutMinutes: 30,
+            warningBeforeExpiryMinutes: 5,
+            sensitiveActionReverificationMinutes: 15,
+          },
+        });
+      }
+
+      return reply.status(200).send({
+        success: true,
+        data: { policy },
+      });
+    }
+  );
+
+  // PATCH /api/admin/security/policies (Update Organization Security Policy with Mandatory Re-verification)
+  server.patch(
+    '/api/admin/security/policies',
+    {
+      preHandler: [
+        (server as any).authenticate,
+        requireRole(UserRole.ADMIN),
+        requireReverification(15),
+      ],
+    },
+    async (request, reply) => {
+      const admin = request.user!;
+      const parseResult = UpdateSecurityPolicySchema.safeParse(request.body);
+
+      if (!parseResult.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid security policy configuration',
+            details: parseResult.error.flatten(),
+          },
+        });
+      }
+
+      const {
+        allowedAuthMethods,
+        allowedEmailDomains,
+        requireTwoStepVerification,
+        otpDeliveryMethod,
+        otpExpirySeconds,
+        otpResendCooldownSeconds,
+        otpMaxAttempts,
+        maxConcurrentSessions,
+        inactivityTimeoutMinutes,
+        warningBeforeExpiryMinutes,
+        sensitiveActionReverificationMinutes,
+        clientAccessPolicy,
+        changeReason,
+      } = parseResult.data;
+
+      const currentPolicy = await prisma.securityPolicy.findUnique({
+        where: { organizationId: admin.organizationId },
+      });
+
+      const updatedPolicy = await prisma.securityPolicy.upsert({
+        where: { organizationId: admin.organizationId },
+        update: {
+          allowedAuthMethods,
+          allowedEmailDomains,
+          requireTwoStepVerification,
+          otpDeliveryMethod,
+          otpExpirySeconds,
+          otpResendCooldownSeconds,
+          otpMaxAttempts,
+          maxConcurrentSessions,
+          inactivityTimeoutMinutes,
+          warningBeforeExpiryMinutes,
+          sensitiveActionReverificationMinutes,
+          clientAccessPolicy: clientAccessPolicy ?? undefined,
+          updatedById: admin.id,
+        },
+        create: {
+          organizationId: admin.organizationId,
+          allowedAuthMethods,
+          allowedEmailDomains,
+          requireTwoStepVerification,
+          otpDeliveryMethod,
+          otpExpirySeconds,
+          otpResendCooldownSeconds,
+          otpMaxAttempts,
+          maxConcurrentSessions,
+          inactivityTimeoutMinutes,
+          warningBeforeExpiryMinutes,
+          sensitiveActionReverificationMinutes,
+          clientAccessPolicy: clientAccessPolicy ?? undefined,
+          updatedById: admin.id,
+        },
+      });
+
+      await logAdminEvent(
+        admin.id,
+        'SECURITY_POLICY_UPDATED',
+        'SecurityPolicy',
+        updatedPolicy.id,
+        currentPolicy ? (currentPolicy as any) : null,
+        (updatedPolicy as any),
+        request.ip
+      );
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          policy: updatedPolicy,
+          message: 'Security policies updated successfully.',
         },
       });
     }

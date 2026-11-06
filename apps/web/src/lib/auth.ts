@@ -67,6 +67,31 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
 
+  // Server-Enforced Inactivity Auto-Logout
+  const policy = await prisma.securityPolicy.findUnique({
+    where: { organizationId: session.user.organizationId },
+  });
+  const timeoutMinutes = policy?.inactivityTimeoutMinutes ?? 30;
+  const timeoutMs = timeoutMinutes * 60 * 1000;
+  const now = Date.now();
+  const lastActivity = session.lastActivityAt ? session.lastActivityAt.getTime() : session.createdAt.getTime();
+
+  if (now - lastActivity > timeoutMs) {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { revokedAt: new Date() },
+    });
+    return null;
+  }
+
+  // Throttled update of lastActivityAt (once every 60 seconds)
+  if (now - lastActivity > 60 * 1000) {
+    prisma.session.update({
+      where: { id: session.id },
+      data: { lastActivityAt: new Date() },
+    }).catch(() => {});
+  }
+
   const user = session.user;
   if (user.isArchived || user.status !== 'ACTIVE') {
     return null;

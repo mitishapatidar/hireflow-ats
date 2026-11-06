@@ -91,5 +91,8 @@ export * from './parser';
 // Monitoring, Telemetry & Sentry Integration (Prompt 16)
 export * from './monitoring';
 
+// Two-Step Login, Session Policies & OTP (Prompt 17)
+export * from './otp';
+
 
 
