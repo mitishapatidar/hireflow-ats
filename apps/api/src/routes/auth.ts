@@ -235,6 +235,144 @@ const authRoutes: FastifyPluginAsync = async (server) => {
   );
 
   // -------------------------------------------------------------
+  // Helper: Production Google OIDC Verification
+  // -------------------------------------------------------------
+  async function verifyGoogleAuthCode(
+    code: string,
+    expectedNonce?: string
+  ): Promise<
+    | { success: true; user: { email: string; email_verified: boolean; sub: string; name: string } }
+    | { success: false; error: string; code: string }
+  > {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri =
+      process.env.GOOGLE_REDIRECT_URI ||
+      `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/auth/callback/google`;
+
+    if (!clientId || !clientSecret) {
+      return {
+        success: false,
+        code: 'GOOGLE_CREDENTIALS_PENDING',
+        error:
+          'Google OAuth credentials (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) are pending configuration in .env.',
+      };
+    }
+
+    try {
+      // 1. Exchange authorization code for tokens
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code',
+        }),
+      });
+
+      if (!tokenResponse.ok) {
+        const errBody = await tokenResponse.text();
+        return {
+          success: false,
+          code: 'OAUTH_TOKEN_EXCHANGE_FAILED',
+          error: `Google token exchange failed: ${errBody}`,
+        };
+      }
+
+      const tokenData = (await tokenResponse.json()) as { id_token?: string; access_token?: string };
+      if (!tokenData.id_token) {
+        return {
+          success: false,
+          code: 'OAUTH_MISSING_ID_TOKEN',
+          error: 'No ID token received from Google OIDC response.',
+        };
+      }
+
+      // 2. Validate Google ID token claims via Google tokeninfo
+      const certsResponse = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(tokenData.id_token)}`
+      );
+      if (!certsResponse.ok) {
+        return {
+          success: false,
+          code: 'OAUTH_INVALID_ID_TOKEN',
+          error: 'Google rejected the ID token signature or claims.',
+        };
+      }
+
+      const payload = (await certsResponse.json()) as {
+        iss?: string;
+        aud?: string;
+        sub?: string;
+        email?: string;
+        email_verified?: string | boolean;
+        name?: string;
+        exp?: string | number;
+        nonce?: string;
+      };
+
+      // 3. Validate issuer
+      if (payload.iss !== 'accounts.google.com' && payload.iss !== 'https://accounts.google.com') {
+        return {
+          success: false,
+          code: 'OAUTH_INVALID_ISSUER',
+          error: `Invalid Google token issuer: ${payload.iss}`,
+        };
+      }
+
+      // 4. Validate audience
+      if (payload.aud !== clientId) {
+        return {
+          success: false,
+          code: 'OAUTH_AUDIENCE_MISMATCH',
+          error: 'Token audience does not match configured GOOGLE_CLIENT_ID.',
+        };
+      }
+
+      // 5. Validate expiration
+      const expNum = Number(payload.exp) * 1000;
+      if (isNaN(expNum) || expNum <= Date.now()) {
+        return {
+          success: false,
+          code: 'OAUTH_TOKEN_EXPIRED',
+          error: 'Google ID token has expired.',
+        };
+      }
+
+      // 6. Validate nonce
+      if (expectedNonce && payload.nonce && payload.nonce !== expectedNonce) {
+        return {
+          success: false,
+          code: 'OAUTH_NONCE_MISMATCH',
+          error: 'OAuth nonce parameter does not match token nonce.',
+        };
+      }
+
+      const isEmailVerified =
+        payload.email_verified === true || payload.email_verified === 'true';
+
+      return {
+        success: true,
+        user: {
+          email: (payload.email || '').toLowerCase().trim(),
+          email_verified: isEmailVerified,
+          sub: payload.sub || '',
+          name: payload.name || payload.email || 'Google User',
+        },
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        code: 'OAUTH_VERIFICATION_ERROR',
+        error: err.message || 'An unexpected error occurred during Google OIDC verification.',
+      };
+    }
+  }
+
+  // -------------------------------------------------------------
   // 3. POST /api/auth/google (Google OAuth2 OIDC)
   // -------------------------------------------------------------
   server.post('/api/auth/google', async (request, reply) => {
@@ -271,15 +409,19 @@ const authRoutes: FastifyPluginAsync = async (server) => {
         name: 'Google Test User',
       };
     } else {
-      // In production or live config, Google client credentials verify the token
-      return reply.status(501).send({
-        success: false,
-        error: {
-          code: 'GOOGLE_CREDENTIALS_PENDING',
-          message:
-            'Google OAuth credentials (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) are pending configuration in .env.',
-        },
-      });
+      // In production with real Google credentials:
+      const oidcResult = await verifyGoogleAuthCode(code, nonce);
+      if (!oidcResult.success) {
+        const statusCode = oidcResult.code === 'GOOGLE_CREDENTIALS_PENDING' ? 501 : 400;
+        return reply.status(statusCode).send({
+          success: false,
+          error: {
+            code: oidcResult.code,
+            message: oidcResult.error,
+          },
+        });
+      }
+      googleUser = oidcResult.user;
     }
 
     // 1. Enforce verified email

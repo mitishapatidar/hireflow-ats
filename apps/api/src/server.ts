@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import healthRoute from './routes/health.js';
+import csrfPlugin from './plugins/csrf.js';
 import authPlugin from './plugins/auth.js';
 import authRoutes from './routes/auth.js';
 import candidateRoutes from './routes/candidates.js';
@@ -53,6 +54,7 @@ export function buildServer() {
     origin: process.env.APP_BASE_URL || 'http://localhost:3000',
     credentials: true,
   });
+  server.register(csrfPlugin);
 
   // Register Auth Plugin
   server.register(authPlugin);

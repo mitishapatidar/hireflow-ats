@@ -409,4 +409,112 @@ describe('Fastify Auth & Permission Integration Tests', () => {
       expect(meResponse.json().error.code).toBe('SESSION_EXPIRED');
     });
   });
+
+  // -------------------------------------------------------------
+  // 6. Fastify CSRF Protection Tests
+  // -------------------------------------------------------------
+  describe('CSRF Protection Plugin', () => {
+    it('should generate a CSRF token on GET /api/auth/csrf', async () => {
+      const response = await server.inject({
+        method: 'GET',
+        url: '/api/auth/csrf',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const json = response.json();
+      expect(json.success).toBe(true);
+      expect(json.data.csrfToken).toBeDefined();
+      expect(json.data.csrfToken.length).toBe(64);
+
+      const cookies = response.headers['set-cookie']?.toString();
+      expect(cookies).toContain('hireflow_csrf=');
+    });
+
+    it('NEGATIVE TEST: should reject state-changing request from unauthorized Origin (HTTP 403)', async () => {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: {
+          origin: 'http://malicious-attacker.com',
+        },
+        payload: {
+          email: 'anika.rao@hireflow.io',
+          password: 'HireFlow@2026!',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const json = response.json();
+      expect(json.error.code).toBe('CSRF_INVALID_ORIGIN');
+    });
+
+    it('NEGATIVE TEST: should reject state-changing request from unauthorized Referer (HTTP 403)', async () => {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: {
+          referer: 'http://malicious-attacker.com/steal-creds',
+        },
+        payload: {
+          email: 'anika.rao@hireflow.io',
+          password: 'HireFlow@2026!',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const json = response.json();
+      expect(json.error.code).toBe('CSRF_INVALID_REFERER');
+    });
+
+    it('NEGATIVE TEST: should reject cookie-authenticated request when CSRF token is mismatched (HTTP 403)', async () => {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/api/auth/logout',
+        headers: {
+          origin: 'http://localhost:3000',
+          cookie: 'hireflow_session=dummy_session; hireflow_csrf=valid_server_token',
+          'x-csrf-token': 'attacker_mismatched_token',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const json = response.json();
+      expect(json.error.code).toBe('CSRF_TOKEN_MISMATCH');
+    });
+
+    it('POSITIVE TEST: should allow state-changing request from authorized Origin with matching CSRF token', async () => {
+      const token = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const response = await server.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: {
+          origin: 'http://localhost:3000',
+          cookie: `hireflow_csrf=${token}`,
+          'x-csrf-token': token,
+        },
+        payload: {
+          email: 'anika.rao@hireflow.io',
+          password: 'HireFlow@2026!',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().success).toBe(true);
+    });
+
+    it('POSITIVE TEST: should exempt Bearer token API requests from browser CSRF Origin checks', async () => {
+      const response = await server.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: {
+          origin: 'http://external-api-client.com',
+          authorization: 'Bearer non_existent_token',
+        },
+      });
+
+      // Bypasses CSRF (not 403 CSRF), instead reaches auth check (401 SESSION_EXPIRED)
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('SESSION_EXPIRED');
+    });
+  });
 });
