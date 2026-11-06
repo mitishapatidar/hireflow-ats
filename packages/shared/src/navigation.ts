@@ -31,6 +31,15 @@ export const INTERNAL_NAVIGATION_ITEMS: NavigationItem[] = [
     description: 'Recruitment pipeline summary and daily activity',
   },
   {
+    id: 'activity',
+    label: 'Daily Activity',
+    path: '/activity',
+    icon: 'CheckSquare',
+    allowedRoles: [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
+    section: 'WORKSPACE',
+    description: 'Recruiter daily KPI tracking, calls, and performance targets',
+  },
+  {
     id: 'candidates',
     label: 'Candidates',
     path: '/candidates',
@@ -92,6 +101,15 @@ export const INTERNAL_NAVIGATION_ITEMS: NavigationItem[] = [
     allowedRoles: [UserRole.RECRUITER, UserRole.ADMIN],
     section: 'WORKSPACE',
     description: 'Client companies, contacts, and account management',
+  },
+  {
+    id: 'sales',
+    label: 'Sales CRM',
+    path: '/sales',
+    icon: 'TrendingUp',
+    allowedRoles: [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
+    section: 'WORKSPACE',
+    description: 'Prospective clients, sales opportunities, and client meetings',
   },
   {
     id: 'reports',

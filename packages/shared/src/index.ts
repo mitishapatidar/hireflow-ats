@@ -78,6 +78,10 @@ export * from './interviews';
 // Communications, Integrations & Templates (Prompt 14)
 export * from './communications';
 
+// Sales CRM, Recruiter Dashboards & Shared Metrics (Prompt 15)
+export * from './sales';
+export * from './metrics';
+
 // Storage, Security & Resume Parsing Pipeline (Prompt 8)
 export * from './storage';
 export * from './security/antivirus';

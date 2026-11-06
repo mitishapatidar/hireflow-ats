@@ -14,6 +14,9 @@ import { pipelineRoutes } from './routes/pipeline.js';
 import { submissionRoutes } from './routes/submissions.js';
 import { interviewRoutes } from './routes/interviews.js';
 import { communicationRoutes } from './routes/communications.js';
+import { salesRoutes } from './routes/sales.js';
+import { dashboardRoutes } from './routes/dashboard.js';
+import { activityRoutes } from './routes/activity.js';
 
 dotenv.config();
 
@@ -77,6 +80,9 @@ export function buildServer() {
   server.register(submissionRoutes);
   server.register(interviewRoutes, { prefix: '/api/interviews' });
   server.register(communicationRoutes, { prefix: '/api/communications' });
+  server.register(salesRoutes, { prefix: '/api/sales' });
+  server.register(dashboardRoutes, { prefix: '/api/dashboard' });
+  server.register(activityRoutes, { prefix: '/api/activity' });
 
   return server;
 }

@@ -79,6 +79,7 @@ enum PaymentStatus {
 
 enum OpportunityStage {
   PROSPECTING
+  MEETING
   QUALIFICATION
   PROPOSAL
   NEGOTIATION
@@ -134,6 +135,8 @@ model Organization {
   candidates             Candidate[]
   stages                 Stage[]
   customFieldDefinitions CustomFieldDefinition[]
+  opportunities          Opportunity[]
+  recruiterTargets       RecruiterTarget[]
 
   @@index([status])
 }
@@ -185,6 +188,10 @@ model User {
   dailyActivities        DailyActivity[]
   clientsOwned           Client[]                  @relation("ClientOwner")
   opportunitiesOwned     Opportunity[]             @relation("OpportunityOwner")
+  opportunitiesConverted Opportunity[]             @relation("OpportunityConvertedBy")
+  meetingsOrganized      Meeting[]                 @relation("MeetingOrganizer")
+  recruiterActivities    RecruiterActivity[]       @relation("RecruiterLoggedActivities")
+  recruiterTargets       RecruiterTarget[]         @relation("RecruiterTargets")
 
   @@index([organizationId])
   @@index([role])
@@ -333,6 +340,7 @@ model Candidate {
   applications Application[]
   threads      Thread[]
   activities   CandidateActivity[]
+  recruiterActivities RecruiterActivity[]
 
   @@index([organizationId])
   @@index([ownerId])
@@ -460,6 +468,7 @@ model Client {
   meetings       Meeting[]
   offers         Offer[]
   placements     Placement[]
+  recruiterActivities RecruiterActivity[]
 
   @@index([organizationId])
   @@index([relationshipOwnerId])
@@ -481,7 +490,8 @@ model ClientContact {
   updatedAt   DateTime @updatedAt
   createdById String?
 
-  jobsHiring Job[]
+  jobsHiring    Job[]
+  opportunities Opportunity[]
 
   @@index([clientId])
   @@index([email])
@@ -604,6 +614,7 @@ model Job {
   reassignmentRequests   JobReassignmentRequest[]
   applications           Application[]
   threads                Thread[]
+  convertedFromOpportunity Opportunity?      @relation("OpportunityConvertedJob")
 
   @@index([organizationId])
   @@index([clientId])
@@ -1035,39 +1046,96 @@ model Placement {
 // ==========================================
 
 model Opportunity {
-  id                String           @id @default(uuid())
-  clientId          String
-  client            Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  ownerId           String
-  owner             User             @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  stage             OpportunityStage @default(PROSPECTING)
-  estimatedValue    Decimal?         @db.Decimal(12, 2)
+  id                String             @id @default(uuid())
+  title             String             @default("New Business Mandate")
+  companyName       String
+  clientId          String?
+  client            Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  primaryContactId  String?
+  primaryContact    ClientContact?     @relation(fields: [primaryContactId], references: [id], onDelete: SetNull)
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  industry          String?
+  location          String?
+  estimatedOpenings Int?               @default(1)
+  estimatedValue    Decimal?           @db.Decimal(12, 2)
   expectedCloseDate DateTime?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  nextFollowUpAt    DateTime?
+  stage             OpportunityStage   @default(PROSPECTING)
+  priority          String             @default("MEDIUM")
+  notes             String?
+  ownerId           String
+  owner             User               @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  isArchived        Boolean            @default(false)
+  convertedJobId    String?            @unique
+  convertedJob      Job?               @relation("OpportunityConvertedJob", fields: [convertedJobId], references: [id], onDelete: SetNull)
+  convertedAt       DateTime?
+  convertedById     String?
+  convertedBy       User?              @relation("OpportunityConvertedBy", fields: [convertedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   createdById       String?
 
+  history           OpportunityHistory[]
+  meetings          Meeting[]
+  activities        RecruiterActivity[]
+
+  @@index([organizationId])
   @@index([clientId])
   @@index([ownerId])
   @@index([stage])
+  @@index([nextFollowUpAt])
+  @@index([isArchived])
+}
+
+model OpportunityHistory {
+  id            String       @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  action        String
+  previousStage String?
+  newStage      String?
+  details       String?
+  metadata      Json?
+  actorId       String?
+  createdAt     DateTime     @default(now())
+
+  @@index([opportunityId])
+  @@index([createdAt])
 }
 
 model Meeting {
-  id           String    @id @default(uuid())
-  clientId     String
-  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  organizerId  String
-  title        String
-  meetingType  String?   @default("CLIENT_CHECK_IN")
-  status       String?   @default("SCHEDULED")
-  scheduledAt  DateTime
-  participants String[]  @default([])
-  notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  createdById  String?
+  id               String        @id @default(uuid())
+  clientId         String?
+  client           Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  opportunityId    String?
+  opportunity      Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  organizerId      String
+  organizer        User          @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  meetingType      String?       @default("CLIENT_CHECK_IN")
+  status           String        @default("SCHEDULED")
+  scheduledAt      DateTime
+  durationMinutes  Int           @default(30)
+  participants     String[]      @default([])
+  contactName      String?
+  contactEmail     String?
+  notes            String?
+  outcome          String?
+  nextAction       String?
+  nextFollowUpAt   DateTime?
+  calendarEventId  String?
+  calendarProvider String?       @default("DEMO_MODE")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  createdById      String?
 
   @@index([clientId])
+  @@index([opportunityId])
   @@index([organizerId])
   @@index([scheduledAt])
 }
@@ -1401,8 +1469,11 @@ model DailyActivity {
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date                DateTime @db.Date
   candidatesSourced   Int      @default(0)
-  interviewsScheduled Int      @default(0)
+  callsMade           Int      @default(0)
+  emailsSent          Int      @default(0)
   submissionsSent     Int      @default(0)
+  interviewsScheduled Int      @default(0)
+  interviewsCompleted Int      @default(0)
   offersReleased      Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -1411,6 +1482,49 @@ model DailyActivity {
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
+}
+
+model RecruiterActivity {
+  id                   String        @id @default(uuid())
+  actorId              String
+  actor                User          @relation("RecruiterLoggedActivities", fields: [actorId], references: [id], onDelete: Cascade)
+  organizationId       String
+  type                 String        // CALL, MEETING, TASK, NOTE
+  relatedCandidateId   String?
+  relatedCandidate     Candidate?    @relation(fields: [relatedCandidateId], references: [id], onDelete: SetNull)
+  relatedClientId      String?
+  relatedClient        Client?       @relation(fields: [relatedClientId], references: [id], onDelete: SetNull)
+  relatedOpportunityId String?
+  relatedOpportunity   Opportunity?  @relation(fields: [relatedOpportunityId], references: [id], onDelete: SetNull)
+  durationMinutes      Int?
+  notes                String?
+  outcome              String?
+  createdAt            DateTime      @default(now())
+
+  @@index([actorId])
+  @@index([organizationId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model RecruiterTarget {
+  id                      String       @id @default(uuid())
+  userId                  String
+  user                    User         @relation("RecruiterTargets", fields: [userId], references: [id], onDelete: Cascade)
+  organizationId          String
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  period                  String       @default("DAILY") // DAILY, WEEKLY, MONTHLY
+  targetCandidatesSourced Int          @default(10)
+  targetCalls             Int          @default(20)
+  targetEmails            Int          @default(15)
+  targetSubmissions       Int          @default(3)
+  targetInterviews        Int          @default(2)
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+
+  @@unique([userId, period])
+  @@index([userId])
+  @@index([organizationId])
 }
 
 model AuditLog {
