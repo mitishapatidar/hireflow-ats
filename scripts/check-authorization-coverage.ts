@@ -213,6 +213,27 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'PATCH', url: '/api/clients/:clientId/workflow/draft', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
   { method: 'POST', url: '/api/clients/:clientId/workflow/publish', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
   { method: 'GET', url: '/api/clients/:clientId/workflow/versions', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+
+  // Data Governance, Custom Fields & Scoped Exports (Prompt 19)
+  { method: 'GET', url: '/api/governance/exports/config', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/governance/exports/preview', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/governance/exports', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'GET', url: '/api/governance/exports/:id/download', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/governance/custom-fields', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/governance/custom-fields', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'PATCH', url: '/api/governance/custom-fields/:id', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'POST', url: '/api/governance/custom-fields/:id/archive', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'POST', url: '/api/governance/custom-fields/client-rule', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'GET', url: '/api/governance/custom-fields/values/:entityType/:entityId', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/governance/custom-fields/values/:entityType/:entityId', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/governance/archive/candidates', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/governance/archive/candidates/:id/restore', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'GET', url: '/api/governance/download-policy', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'PATCH', url: '/api/governance/download-policy', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'GET', url: '/api/governance/downloads/usage', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
+  { method: 'GET', url: '/api/governance/cv/:candidateId/download', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT] },
+  { method: 'GET', url: '/api/governance/audit-logs', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'POST', url: '/api/governance/audit-logs/export', isPublic: false, allowedRoles: [UserRole.ADMIN] },
 ];
 
 async function runAuthorizationAudit() {

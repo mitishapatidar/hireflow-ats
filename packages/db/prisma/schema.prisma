@@ -139,6 +139,8 @@ model Organization {
   recruiterTargets       RecruiterTarget[]
   securityPolicy         SecurityPolicy?
   otpChallenges          OtpChallenge[]
+  downloadPolicies       DownloadPolicy[]
+  exportRequests         ExportRequest[]
 
   @@index([status])
 }
@@ -195,6 +197,7 @@ model User {
   recruiterActivities    RecruiterActivity[]       @relation("RecruiterLoggedActivities")
   recruiterTargets       RecruiterTarget[]         @relation("RecruiterTargets")
   otpChallenges          OtpChallenge[]
+  exportRequests         ExportRequest[]
 
   @@index([organizationId])
   @@index([role])
@@ -450,22 +453,33 @@ model CandidateDocument {
 }
 
 model CustomFieldDefinition {
-  id             String       @id @default(uuid())
-  entityType     String
-  fieldName      String
-  fieldType      String
-  options        String[]     @default([])
-  isRequired     Boolean      @default(false)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  createdById    String?
+  id              String       @id @default(uuid())
+  entityType      String       // CANDIDATE, JOB, CLIENT
+  fieldName       String
+  fieldKey        String?      // snake_case unique key (e.g. candidate_linkedin, expected_currency)
+  fieldType       String       // TEXT, NUMBER, DATE, URL, SELECT, MULTI_SELECT
+  description     String?
+  options         String[]     @default([])
+  isRequired      Boolean      @default(false)
+  visibility      String       @default("INTERNAL_ONLY") // INTERNAL_ONLY, CLIENT_PROFILE_INCLUDED
+  validationRules Json?        // { minLength, maxLength, minValue, maxValue, pattern, maxItems }
+  defaultValue    Json?
+  displayOrder    Int          @default(0)
+  isActive        Boolean      @default(true)
+  version         Int          @default(1)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  createdById     String?
+  updatedById     String?
 
-  values CustomFieldValue[]
+  values      CustomFieldValue[]
+  clientRules ClientCustomFieldRule[]
 
   @@unique([organizationId, entityType, fieldName])
   @@index([organizationId])
+  @@index([entityType, isActive])
 }
 
 model CustomFieldValue {
@@ -480,6 +494,21 @@ model CustomFieldValue {
 
   @@unique([fieldDefinitionId, entityId])
   @@index([entityId])
+}
+
+model ClientCustomFieldRule {
+  id                String                @id @default(uuid())
+  clientId          String
+  client            Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fieldDefinitionId String
+  fieldDefinition   CustomFieldDefinition @relation(fields: [fieldDefinitionId], references: [id], onDelete: Cascade)
+  isRequired        Boolean               @default(true)
+  workflowVersion   Int                   @default(1)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@unique([clientId, fieldDefinitionId])
+  @@index([clientId])
 }
 
 // ==========================================
@@ -520,6 +549,7 @@ model Client {
   offers         Offer[]
   placements     Placement[]
   recruiterActivities RecruiterActivity[]
+  customFieldRules    ClientCustomFieldRule[]
 
   @@index([organizationId])
   @@index([relationshipOwnerId])
@@ -1555,20 +1585,77 @@ model DuplicatePair {
   @@index([status])
 }
 
+model DownloadPolicy {
+  id                    String       @id @default(uuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role                  String       // RECRUITER, MANAGER, CLIENT, ADMIN
+  dailyCvLimit          Int          @default(50)
+  requireWatermark      Boolean      @default(true)
+  watermarkPattern      String       @default("HIREFLOW / {{CLIENT_NAME}} / {{DATE}}")
+  allowOriginalDownload Boolean      @default(false)
+  isActive              Boolean      @default(true)
+  updatedById           String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@unique([organizationId, role])
+  @@index([organizationId])
+}
+
 model DownloadLog {
-  id           String   @id @default(uuid())
-  userId       String
-  resourceType String
-  resourceId   String
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdById  String?
+  id               String   @id @default(uuid())
+  userId           String
+  resourceType     String   // CV, EXPORT, REPORT, CANDIDATE_DOCUMENT, CLIENT_DOCUMENT
+  resourceId       String
+  organizationId   String?
+  entityType       String?  // CANDIDATE, CLIENT, JOB, EXPORT
+  entityId         String?
+  documentId       String?
+  purpose          String?  // CLIENT_SUBMISSION, RECRUITER_REVIEW, AUDIT, COMPLIANCE
+  clientId         String?
+  jobId            String?
+  fileFormat       String?  // PDF, CSV, XLSX, DOCX
+  watermarkApplied Boolean  @default(false)
+  watermarkText    String?
+  result           String   @default("SUCCESS") // SUCCESS, DENIED, FAILED
+  denialReason     String?  // DAILY_LIMIT_EXCEEDED, UNAUTHORIZED_SCOPE, REVERIFICATION_REQUIRED
+  requestId        String?
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdById      String?
 
   @@index([userId])
+  @@index([organizationId])
   @@index([resourceType, resourceId])
   @@index([createdAt])
+}
+
+model ExportRequest {
+  id              String       @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityType      String       // CANDIDATES, JOBS, CLIENTS, APPLICATIONS, SUBMISSIONS, INTERVIEWS, PLACEMENTS, AUDIT_LOGS
+  format          String       @default("CSV") // CSV, XLSX
+  selectedColumns String[]
+  filters         Json?        // { dateRange: { start, end }, clientId, jobId, status }
+  status          String       @default("PENDING") // PENDING, READY, FAILED, EXPIRED
+  fileKey         String?      // Randomized storage key in private storage
+  fileName        String?
+  fileSize        Int?
+  rowCount        Int?
+  downloadCount   Int          @default(0)
+  expiresAt       DateTime     // 24-hour retention
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model DailyActivity {

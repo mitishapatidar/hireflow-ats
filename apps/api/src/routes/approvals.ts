@@ -11,7 +11,7 @@ import {
 
 export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance) => {
   // Helper: Verify Manager or Admin role
-  function requireManagerOrAdmin(user: any, reply: any): boolean {
+  function requireManagerOrAdmin(user: any, reply: any): user is NonNullable<any> {
     if (!user) {
       reply.status(401).send({ success: false, error: 'Unauthorized' });
       return false;
@@ -83,7 +83,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const query = request.query as {
@@ -116,7 +116,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
         };
 
         if (subordinateIds !== null) {
-          where.application = {
+          (where as any).application = {
             ...where.application,
             OR: [
               { candidate: { ownerId: { in: subordinateIds } } },
@@ -297,7 +297,6 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
                   owner: { select: { name: true } },
                 },
               },
-              reviewer: { select: { name: true } },
             },
             orderBy: { createdAt: 'desc' },
             take: limit,
@@ -350,7 +349,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/submissions/:id',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { id } = request.params as { id: string };
@@ -504,7 +503,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
           isSelfSubmission,
           approvalHistory: submission.approvals.map((a) => ({
             id: a.id,
-            reviewerName: a.reviewer.name,
+            reviewerName: (a as any).reviewer?.name || a.reviewerId || 'Manager',
             decision: a.decision,
             comments: a.comments,
             approvedAt: a.approvedAt?.toISOString() || null,
@@ -525,7 +524,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/submissions/:id/approve',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { id } = request.params as { id: string };
@@ -696,7 +695,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/submissions/:id/request-changes',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { id } = request.params as { id: string };
@@ -754,7 +753,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
             submissionId: sub.id,
             reviewerId: user.id,
             decision: 'CHANGES_REQUESTED',
-            comments: body.comments.trim(),
+            comments: body.comments ? body.comments.trim() : null,
             profileVersion: sub.version,
             submissionVersion: sub.version,
             contentHash: sub.profileVersions[0]?.contentHash || null,
@@ -787,7 +786,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/submissions/:id/reject',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { id } = request.params as { id: string };
@@ -845,7 +844,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
             submissionId: sub.id,
             reviewerId: user.id,
             decision: 'REJECTED',
-            comments: body.comments.trim(),
+            comments: body.comments ? body.comments.trim() : null,
             profileVersion: sub.version,
             submissionVersion: sub.version,
             contentHash: sub.profileVersions[0]?.contentHash || null,
@@ -878,7 +877,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/jobs/:id',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { id } = request.params as { id: string };
@@ -886,12 +885,11 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
       const job = await prisma.job.findUnique({
         where: { id },
         include: {
-          client: { select: { id: true, legalName: true, code: true, tier: true } },
+          client: { select: { id: true, legalName: true, code: true } },
           owner: { select: { id: true, name: true, email: true } },
           hiringManagerContact: { select: { id: true, name: true, email: true } },
           rounds: { orderBy: { roundOrder: 'asc' } },
           approvals: {
-            include: { reviewer: { select: { id: true, name: true, role: true } } },
             orderBy: { createdAt: 'desc' },
           },
         },
@@ -940,7 +938,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
           isSelfJob,
           approvals: job.approvals.map((a) => ({
             id: a.id,
-            reviewerName: a.reviewer.name,
+            reviewerName: (a as any).reviewer?.name || a.reviewerId || 'Manager',
             decision: a.decision,
             comments: a.comments,
             createdAt: a.createdAt.toISOString(),
@@ -958,7 +956,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/jobs/:id/approve',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { id } = request.params as { id: string };
@@ -1048,7 +1046,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/jobs/:id/request-changes',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { id } = request.params as { id: string };
@@ -1092,7 +1090,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
             jobId: job.id,
             reviewerId: user.id,
             decision: 'CHANGES_REQUESTED',
-            comments: body.comments.trim(),
+            comments: body.comments ? body.comments.trim() : null,
           },
         });
 
@@ -1103,7 +1101,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
             newStatus: JobStatus.DRAFT as any,
             changedById: user.id,
             reason: 'CHANGES_REQUESTED',
-            note: body.comments.trim(),
+            note: body.comments ? body.comments.trim() : null,
             createdById: user.id,
           },
         });
@@ -1134,7 +1132,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/jobs/:id/reject',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { id } = request.params as { id: string };
@@ -1173,7 +1171,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
           data: {
             status: JobStatus.CLOSED as any,
             closingReason: 'REJECTED_BY_MANAGER',
-            closingNote: body.comments.trim(),
+            closingNote: body.comments ? body.comments.trim() : null,
           },
         });
 
@@ -1182,7 +1180,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
             jobId: job.id,
             reviewerId: user.id,
             decision: 'REJECTED',
-            comments: body.comments.trim(),
+            comments: body.comments ? body.comments.trim() : null,
           },
         });
 
@@ -1193,7 +1191,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
             newStatus: JobStatus.CLOSED as any,
             changedById: user.id,
             reason: 'REJECTED_BY_MANAGER',
-            note: body.comments.trim(),
+            note: body.comments ? body.comments.trim() : null,
             createdById: user.id,
           },
         });
@@ -1224,7 +1222,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
     '/history',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const query = request.query as { page?: string; limit?: string };
@@ -1239,7 +1237,6 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
             },
           },
           include: {
-            reviewer: { select: { name: true, email: true } },
             submission: {
               include: {
                 application: {
@@ -1259,7 +1256,6 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
             job: { organizationId: user.organizationId },
           },
           include: {
-            reviewer: { select: { name: true, email: true } },
             job: {
               include: {
                 client: { select: { legalName: true } },
@@ -1278,7 +1274,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
           targetCode: sa.submission.code,
           targetTitle: `${sa.submission.application.candidate.name} → ${sa.submission.application.job.title}`,
           clientName: sa.submission.application.job.client.legalName,
-          reviewerName: sa.reviewer.name,
+          reviewerName: (sa as any).reviewer?.name || sa.reviewerId || 'Manager',
           decision: sa.decision,
           comments: sa.comments,
           approvedAt: sa.approvedAt?.toISOString() || null,
@@ -1293,7 +1289,7 @@ export const approvalRoutes: FastifyPluginAsync = async (server: FastifyInstance
           targetCode: ja.job.code,
           targetTitle: ja.job.title,
           clientName: ja.job.client.legalName,
-          reviewerName: ja.reviewer.name,
+          reviewerName: (ja as any).reviewer?.name || ja.reviewerId || 'Manager',
           decision: ja.decision,
           comments: ja.comments,
           approvedAt: ja.approvedAt?.toISOString() || null,

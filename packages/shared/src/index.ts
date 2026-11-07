@@ -98,5 +98,8 @@ export * from './otp';
 export * from './approvals';
 export * from './client-workflows';
 
+// Data Governance, Custom Fields & Scoped Exports (Prompt 19)
+export * from './data-governance';
+
 
 

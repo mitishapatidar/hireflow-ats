@@ -107,7 +107,7 @@ export const clientWorkflowRoutes: FastifyPluginAsync = async (server: FastifyIn
     '/:clientId/workflow',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!user) return reply.status(401).send({ success: false, error: 'Unauthorized' });
 
       const { clientId } = request.params as { clientId: string };
@@ -234,7 +234,7 @@ export const clientWorkflowRoutes: FastifyPluginAsync = async (server: FastifyIn
     '/:clientId/workflow/draft',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { clientId } = request.params as { clientId: string };
@@ -348,7 +348,7 @@ export const clientWorkflowRoutes: FastifyPluginAsync = async (server: FastifyIn
     '/:clientId/workflow/draft',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { clientId } = request.params as { clientId: string };
@@ -388,9 +388,9 @@ export const clientWorkflowRoutes: FastifyPluginAsync = async (server: FastifyIn
             data: stages.map((s, idx) => ({
               workflowId: draft.id,
               name: s.name,
-              order: s.stageOrder || idx + 1,
+              order: s.order || idx + 1,
               stageType: s.stageType || 'CUSTOM',
-              configuration: { colorHex: s.colorHex || '#4A5568' },
+              configuration: { colorHex: (s as any).colorHex || '#4A5568' },
               isActive: s.isActive ?? true,
             })),
           });
@@ -457,7 +457,7 @@ export const clientWorkflowRoutes: FastifyPluginAsync = async (server: FastifyIn
     '/:clientId/workflow/publish',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { clientId } = request.params as { clientId: string };
@@ -558,7 +558,7 @@ export const clientWorkflowRoutes: FastifyPluginAsync = async (server: FastifyIn
     '/:clientId/workflow/versions',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!user) return reply.status(401).send({ success: false, error: 'Unauthorized' });
 
       const { clientId } = request.params as { clientId: string };

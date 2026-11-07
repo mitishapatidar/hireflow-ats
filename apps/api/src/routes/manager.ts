@@ -9,7 +9,7 @@ import {
 
 export const managerRoutes: FastifyPluginAsync = async (server: FastifyInstance) => {
   // Helper: Verify Manager or Admin role
-  function requireManagerOrAdmin(user: any, reply: any): boolean {
+  function requireManagerOrAdmin(user: any, reply: any): user is NonNullable<any> {
     if (!user) {
       reply.status(401).send({ success: false, error: 'Unauthorized' });
       return false;
@@ -55,7 +55,7 @@ export const managerRoutes: FastifyPluginAsync = async (server: FastifyInstance)
     '/overview',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { startUtc, endUtc, label: currentMonthLabel } = getISTMonthBoundaries();
@@ -90,7 +90,7 @@ export const managerRoutes: FastifyPluginAsync = async (server: FastifyInstance)
         isArchived: false,
       };
       if (subordinateIds !== null) {
-        submissionsWhere.application = {
+        (submissionsWhere as any).application = {
           ...submissionsWhere.application,
           OR: [
             { candidate: { ownerId: { in: subordinateIds } } },
@@ -120,7 +120,7 @@ export const managerRoutes: FastifyPluginAsync = async (server: FastifyInstance)
         createdAt: { gte: startUtc, lte: endUtc },
       };
       if (subordinateIds !== null) {
-        placementsWhere.application = {
+        (placementsWhere as any).application = {
           ...placementsWhere.application,
           OR: [
             { candidate: { ownerId: { in: subordinateIds } } },
@@ -230,7 +230,7 @@ export const managerRoutes: FastifyPluginAsync = async (server: FastifyInstance)
     '/team-performance',
     { preHandler: [(server as any).authenticate] },
     async (request, reply) => {
-      const user = request.user;
+      const user = request.user!;
       if (!requireManagerOrAdmin(user, reply)) return;
 
       const { startUtc, endUtc } = getISTMonthBoundaries();

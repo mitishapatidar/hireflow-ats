@@ -77,10 +77,10 @@ export default function AdminPage() {
     },
     {
       title: 'Custom fields & exports',
-      desc: 'Configure custom fields, exports, archives and audit trails for the workspace.',
+      desc: 'Configure custom fields, exports, archives, download policies and audit trails.',
       icon: FileText,
-      onClick: () => setActiveIntegrationModal('Custom Fields'),
-      badge: 'GDPR Compliant',
+      href: '/admin/data-governance',
+      badge: 'Frame 33 & 37',
     },
   ];
 

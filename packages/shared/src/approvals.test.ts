@@ -185,6 +185,8 @@ describe('Prompt 18: Approvals, Client Rules & Self-Approval Prevention Tests', 
         isInvalidated: true,
         approvalProfileVersion: 2,
         currentProfileVersion: 2,
+        approvalSubmissionVersion: 1,
+        currentSubmissionVersion: 1,
       });
       expect(valid).toBe(false);
     });
@@ -194,6 +196,8 @@ describe('Prompt 18: Approvals, Client Rules & Self-Approval Prevention Tests', 
         isInvalidated: false,
         approvalProfileVersion: 1,
         currentProfileVersion: 2, // New profile version created
+        approvalSubmissionVersion: 1,
+        currentSubmissionVersion: 1,
       });
       expect(valid).toBe(false);
     });
@@ -288,7 +292,7 @@ describe('Prompt 18: Approvals, Client Rules & Self-Approval Prevention Tests', 
         role: UserRole.CLIENT,
         organizationId: 'org-1',
         status: 'ACTIVE',
-        clientAccess: { clientId: 'cl-1', authorizedJobIds: [], allowDirectFeedback: true, dailyCvDownloadLimit: 10 },
+        clientAccess: { clientId: 'cl-1', authorizedJobIds: [] },
       };
 
       const candidateUser: AuthUser = {

@@ -19,7 +19,10 @@ export type ResourceType =
   | 'user'
   | 'invitation'
   | 'audit_log'
-  | 'report';
+  | 'report'
+  | 'custom_field'
+  | 'download_policy'
+  | 'data_export';
 
 export interface AuthUser {
   id: string;
@@ -96,9 +99,15 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         resource.type === 'organization' ||
         resource.type === 'user' ||
         resource.type === 'invitation' ||
-        resource.type === 'audit_log'
+        resource.type === 'audit_log' ||
+        resource.type === 'download_policy' ||
+        resource.type === 'data_export'
       ) {
         return false;
+      }
+
+      if (resource.type === 'custom_field') {
+        return action === 'read';
       }
 
       // Internal fees / commercial terms: by explicit grant only
@@ -219,6 +228,14 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         return action === 'read';
       }
 
+      if (resource.type === 'download_policy' || resource.type === 'data_export') {
+        return false;
+      }
+
+      if (resource.type === 'custom_field') {
+        return action === 'read';
+      }
+
       return true;
     }
 
@@ -252,7 +269,10 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         resource.type === 'organization' ||
         resource.type === 'user' ||
         resource.type === 'invitation' ||
-        resource.type === 'audit_log'
+        resource.type === 'audit_log' ||
+        resource.type === 'download_policy' ||
+        resource.type === 'data_export' ||
+        resource.type === 'custom_field'
       ) {
         return false;
       }
@@ -310,6 +330,9 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         resource.type === 'user' ||
         resource.type === 'invitation' ||
         resource.type === 'audit_log' ||
+        resource.type === 'download_policy' ||
+        resource.type === 'data_export' ||
+        resource.type === 'custom_field' ||
         resource.type === 'report'
       ) {
         return false;

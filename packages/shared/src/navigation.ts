@@ -176,6 +176,15 @@ export const INTERNAL_NAVIGATION_ITEMS: NavigationItem[] = [
     description: 'System configurations, permissions, team setup, and audit logs',
   },
   {
+    id: 'data-governance',
+    label: 'Data Governance',
+    path: '/admin/data-governance',
+    icon: 'Database',
+    allowedRoles: [UserRole.ADMIN],
+    section: 'SYSTEM',
+    description: 'Scoped exports, custom fields, candidate archive & restore, download policy and audit trail',
+  },
+  {
     id: 'integrations',
     label: 'Integrations',
     path: '/integrations',
