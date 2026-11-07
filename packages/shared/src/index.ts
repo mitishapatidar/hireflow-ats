@@ -110,6 +110,9 @@ export * from './sourcing-integrations';
 // Client Portal (Prompt 22)
 export * from './client-portal';
 
+// Notifications, Tasks & Automation Rules (Prompt 24)
+export * from './automation';
+
 
 
 

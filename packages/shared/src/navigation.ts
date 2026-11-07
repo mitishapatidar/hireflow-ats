@@ -202,6 +202,24 @@ export const INTERNAL_NAVIGATION_ITEMS: NavigationItem[] = [
     section: 'SYSTEM',
     description: 'Gmail, Outlook, WhatsApp, and SMS provider integrations',
   },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    path: '/notifications',
+    icon: 'Bell',
+    allowedRoles: [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
+    section: 'WORKSPACE',
+    description: 'Unified notification centre, follow-up tasks, and morning digest',
+  },
+  {
+    id: 'automation',
+    label: 'Automation Rules',
+    path: '/admin/automation',
+    icon: 'Zap',
+    allowedRoles: [UserRole.ADMIN],
+    section: 'SYSTEM',
+    description: 'Admin automated workflows, reminders, client triggers, and message templates',
+  },
 ];
 
 // Client Portal Navigation Items
@@ -356,6 +374,8 @@ export const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
   '/pipelines': [UserRole.MANAGER, UserRole.ADMIN],
   '/performance': [UserRole.MANAGER, UserRole.ADMIN],
   '/admin': [UserRole.MANAGER, UserRole.ADMIN],
+  '/admin/automation': [UserRole.ADMIN],
+  '/notifications': [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
   '/portal': [UserRole.CLIENT, UserRole.ADMIN],
   '/positions': [UserRole.CLIENT, UserRole.ADMIN],
   '/submitted-profiles': [UserRole.CLIENT, UserRole.ADMIN],

@@ -64,12 +64,16 @@ export enum ConnectionState {
 
 export const SUPPORTED_MERGE_FIELDS = [
   'first_name',
+  'candidate_name',
   'client',
+  'job_title',
   'round',
   'date',
   'time',
   'meeting_link',
   'recruiter_name',
+  'task_title',
+  'due_date',
 ] as const;
 
 export type SupportedMergeField = typeof SUPPORTED_MERGE_FIELDS[number];

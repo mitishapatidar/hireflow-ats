@@ -202,6 +202,7 @@ model User {
   otpChallenges          OtpChallenge[]
   exportRequests         ExportRequest[]
   extensionTokens        ExtensionCaptureToken[]
+  dailyDigests           DailyDigest[]
 
   @@index([organizationId])
   @@index([role])
@@ -1438,19 +1439,60 @@ model CandidateActivity {
 }
 
 model AutomationRule {
-  id            String   @id @default(uuid())
-  name          String
-  triggerEvent  String
-  conditions    Json
-  actions       Json
-  version       Int      @default(1)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  createdById   String?
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  triggerEvent    String
+  conditions      Json
+  actions         Json
+  status          String   @default("DRAFT")
+  clientScope     String?
+  timing          Json?
+  recipients      Json?
+  channels        Json?
+  templateId      String?
+  templateSubject String?
+  templateBody    String?
+  version         Int      @default(1)
+  isActive        Boolean  @default(true)
+  isArchived      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdById     String?
+
+  executions      AutomationExecution[]
 
   @@index([triggerEvent])
   @@index([isActive])
+  @@index([status])
+  @@index([clientScope])
+  @@index([isArchived])
+}
+
+model AutomationExecution {
+  id               String          @id @default(uuid())
+  ruleId           String
+  rule             AutomationRule  @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleVersion      Int
+  triggerEvent     String
+  relatedEntity    String?
+  relatedEntityId  String?
+  recipientId      String?
+  recipientType    String?
+  channel          String
+  status           String          @default("PENDING")
+  attemptCount     Int             @default(1)
+  idempotencyKey   String          @unique
+  failureReason    String?
+  providerResponse Json?
+  startedAt        DateTime        @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
+
+  @@index([ruleId])
+  @@index([status])
+  @@index([startedAt])
+  @@index([idempotencyKey])
 }
 
 model Task {
@@ -1464,6 +1506,13 @@ model Task {
   priority             TaskPriority @default(MEDIUM)
   relatedInterviewId   String?
   relatedApplicationId String?
+  relatedEntity        String?
+  relatedEntityId      String?
+  snoozedUntil         DateTime?
+  reminderAt           DateTime?
+  creatorNotes         String?
+  completedAt          DateTime?
+  isArchived           Boolean      @default(false)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
   createdById          String?
@@ -1473,6 +1522,8 @@ model Task {
   @@index([dueDate])
   @@index([relatedInterviewId])
   @@index([relatedApplicationId])
+  @@index([relatedEntity, relatedEntityId])
+  @@index([isArchived])
 }
 
 model Notification {
@@ -1482,13 +1533,20 @@ model Notification {
   title       String
   message     String
   type        String
+  category    String?
+  linkUrl     String?
+  priority    String?   @default("NORMAL")
+  metadata    Json?
   readAt      DateTime?
+  isArchived  Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   createdById String?
 
   @@index([userId])
   @@index([readAt])
+  @@index([category])
+  @@index([isArchived])
 }
 
 model NotificationPreference {
@@ -1496,6 +1554,7 @@ model NotificationPreference {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel     String
+  categories  Json?
   enabled     Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1503,6 +1562,22 @@ model NotificationPreference {
 
   @@unique([userId, channel])
   @@index([userId])
+}
+
+model DailyDigest {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  digestDate  String
+  channel     String   @default("IN_APP")
+  itemsCount  Int      @default(0)
+  content     Json
+  status      String   @default("SENT")
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, digestDate, channel])
+  @@index([userId])
+  @@index([digestDate])
 }
 
 // ==========================================

@@ -42,6 +42,13 @@ export function RecruiterDashboardClientView({ initialData }: RecruiterDashboard
   const interviewsThisWeek = kpis.interviewsThisWeek || { value: 0, delta: '0 vs last week' };
   const placementsThisMonth = kpis.placementsThisMonth || { value: 0, delta: '0 vs last month' };
 
+  const getDeltaText = (delta: any, fallback = '0 vs last month'): string => {
+    if (!delta) return fallback;
+    if (typeof delta === 'string') return delta;
+    if (typeof delta === 'object' && typeof delta.displayText === 'string') return delta.displayText;
+    return fallback;
+  };
+
   const pipelineStages = data?.pipelineDistribution?.stages || [];
   const totalApplications = data?.pipelineDistribution?.totalApplications || 0;
   const todayAgenda = data?.todayAgenda || [];
@@ -94,7 +101,7 @@ export function RecruiterDashboardClientView({ initialData }: RecruiterDashboard
             <div className="text-3xl font-extrabold text-[#1B2236] tracking-tight">{activeJobs.value}</div>
             <div className="text-xs text-[#12B76A] mt-1.5 font-medium flex items-center gap-1">
               <ArrowUpRight className="w-3.5 h-3.5" />
-              <span>{activeJobs.delta}</span>
+              <span>{getDeltaText(activeJobs.delta)}</span>
             </div>
           </div>
         </div>
@@ -111,7 +118,7 @@ export function RecruiterDashboardClientView({ initialData }: RecruiterDashboard
             <div className="text-3xl font-extrabold text-[#1B2236] tracking-tight">{candidates.value}</div>
             <div className="text-xs text-[#12B76A] mt-1.5 font-medium flex items-center gap-1">
               <ArrowUpRight className="w-3.5 h-3.5" />
-              <span>{candidates.delta}</span>
+              <span>{getDeltaText(candidates.delta)}</span>
             </div>
           </div>
         </div>
@@ -128,7 +135,7 @@ export function RecruiterDashboardClientView({ initialData }: RecruiterDashboard
             <div className="text-3xl font-extrabold text-[#1B2236] tracking-tight">{interviewsThisWeek.value}</div>
             <div className="text-xs text-[#4A5568] mt-1.5 font-medium flex items-center gap-1">
               <CalendarCheck2 className="w-3.5 h-3.5 text-[#D97706]" />
-              <span>{interviewsThisWeek.delta}</span>
+              <span>{getDeltaText(interviewsThisWeek.delta, '0 vs last week')}</span>
             </div>
           </div>
         </div>
@@ -145,7 +152,7 @@ export function RecruiterDashboardClientView({ initialData }: RecruiterDashboard
             <div className="text-3xl font-extrabold text-[#1B2236] tracking-tight">{placementsThisMonth.value}</div>
             <div className="text-xs text-[#059669] mt-1.5 font-medium flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{placementsThisMonth.delta}</span>
+              <span>{getDeltaText(placementsThisMonth.delta)}</span>
             </div>
           </div>
         </div>

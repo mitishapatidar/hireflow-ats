@@ -274,6 +274,27 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'POST', url: '/api/client-portal/submissions/:id/feedback', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
   { method: 'GET', url: '/api/client-portal/interviews', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
   { method: 'GET', url: '/api/client-portal/reports', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+
+  // Notifications, Follow-up Tasks & Automation Rules (Prompt 24)
+  { method: 'GET', url: '/api/notifications', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/notifications/:id/read', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/notifications/read-all', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/notifications/preferences', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'PUT', url: '/api/notifications/preferences', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/notifications/stream', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/tasks', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/tasks', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'PATCH', url: '/api/tasks/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/tasks/:id/snooze', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/tasks/:id/complete', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/automation/rules', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'POST', url: '/api/automation/rules', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'PATCH', url: '/api/automation/rules/:id', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'POST', url: '/api/automation/rules/:id/activate', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'POST', url: '/api/automation/rules/:id/pause', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'POST', url: '/api/automation/preview', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'GET', url: '/api/automation/executions', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'GET', url: '/api/automation/digests/today', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
 ];
 
 async function runAuthorizationAudit() {

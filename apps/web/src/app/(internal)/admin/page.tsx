@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Building,
   CheckCircle2,
+  Zap,
 } from 'lucide-react';
 import { getAuditLogsAction } from '../../../actions/admin';
 
@@ -81,6 +82,13 @@ export default function AdminPage() {
       icon: FileText,
       href: '/admin/data-governance',
       badge: 'Frame 33 & 37',
+    },
+    {
+      title: 'Automation Rules',
+      desc: 'Configure interview reminders, follow-up reminders, client scopes, and message templates.',
+      icon: Zap,
+      href: '/admin/automation',
+      badge: 'Frame 36 Engine',
     },
   ];
 

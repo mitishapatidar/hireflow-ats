@@ -25,6 +25,9 @@ import { clientWorkflowRoutes } from './routes/client-workflows.js';
 import { governanceRoutes } from './routes/governance.js';
 import { sourcingRoutes } from './routes/sourcing.js';
 import { clientPortalRoutes } from './routes/client-portal.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { taskRoutes } from './routes/tasks.js';
+import { automationRoutes } from './routes/automation.js';
 
 dotenv.config();
 
@@ -146,6 +149,9 @@ export function buildServer() {
   server.register(governanceRoutes);
   server.register(sourcingRoutes);
   server.register(clientPortalRoutes);
+  server.register(notificationRoutes, { prefix: '/api/notifications' });
+  server.register(taskRoutes, { prefix: '/api/tasks' });
+  server.register(automationRoutes, { prefix: '/api/automation' });
 
   return server;
 }
