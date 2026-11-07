@@ -360,6 +360,7 @@ async function runAuthorizationAudit() {
 
   console.log('\n✅ Authorization Check PASSED: 100% of Fastify routes have verified security policies.');
   await server.close();
+  process.exit(0);
 }
 
 runAuthorizationAudit().catch((err) => {
