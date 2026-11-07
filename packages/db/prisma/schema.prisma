@@ -1087,6 +1087,9 @@ model Submission {
   sentById               String?
   clientDecision         String?
   clientFeedback         String?
+  clientDecisionAt       DateTime?
+  clientDecisionReason   String?
+  clientDecisionHistory  Json?
   isArchived             Boolean                  @default(false)
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt

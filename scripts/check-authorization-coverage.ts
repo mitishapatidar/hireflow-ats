@@ -258,6 +258,22 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'GET', url: '/api/sourcing/integrations', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
   { method: 'POST', url: '/api/sourcing/integrations/:provider/connect', isPublic: false, allowedRoles: [UserRole.ADMIN] },
   { method: 'POST', url: '/api/sourcing/integrations/:provider/disconnect', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+
+  // Client Portal (Prompt 22)
+  { method: 'GET', url: '/api/client-portal/overview', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'GET', url: '/api/client-portal/positions', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'GET', url: '/api/client-portal/positions/:id', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'GET', url: '/api/client-portal/submissions', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'GET', url: '/api/client-portal/submissions/:id', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'GET', url: '/api/client-portal/submissions/:id/profile', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'GET', url: '/api/client-portal/submissions/:id/cv/preview', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'POST', url: '/api/client-portal/submissions/:id/cv/download', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'POST', url: '/api/client-portal/submissions/:id/shortlist', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'POST', url: '/api/client-portal/submissions/:id/reject', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'POST', url: '/api/client-portal/submissions/:id/request-details', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'POST', url: '/api/client-portal/submissions/:id/feedback', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'GET', url: '/api/client-portal/interviews', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
+  { method: 'GET', url: '/api/client-portal/reports', isPublic: false, allowedRoles: [UserRole.CLIENT, UserRole.ADMIN] },
 ];
 
 async function runAuthorizationAudit() {

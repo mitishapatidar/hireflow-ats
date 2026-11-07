@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useDevUser } from '../../context/DevUserContext';
 import { CLIENT_NAVIGATION_ITEMS } from '@hireflow/shared';
 import { NavIcon } from './NavIcon';
-import { Building2, Menu, X } from 'lucide-react';
+import { Building2, Menu, X, LogOut } from 'lucide-react';
 import { RouteGuard } from './RouteGuard';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -85,6 +85,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                   <div className="font-semibold text-white leading-tight">{currentUser.name}</div>
                   <div className="text-[10px] text-[#6B7490] leading-tight">{currentUser.roleTitle}</div>
                 </div>
+                <Link
+                  href="/login"
+                  title="Sign Out"
+                  className="p-1.5 rounded-lg text-[#6B7490] hover:text-white hover:bg-white/10 transition-colors ml-1"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Link>
               </div>
             </div>
           </div>

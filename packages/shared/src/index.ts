@@ -107,5 +107,9 @@ export * from './merges';
 export * from './sourcing';
 export * from './sourcing-integrations';
 
+// Client Portal (Prompt 22)
+export * from './client-portal';
+
+
 
 

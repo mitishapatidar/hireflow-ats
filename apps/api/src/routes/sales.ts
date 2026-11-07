@@ -8,6 +8,7 @@ import {
   isValidStageTransition,
   validateOpportunityConversionPrerequisites,
   serializeOpportunitySafe,
+  generateJobCode,
   CreateOpportunitySchema,
   UpdateOpportunitySchema,
   ChangeOpportunityStageSchema,
@@ -514,13 +515,11 @@ export const salesRoutes: FastifyPluginAsync = async (server: FastifyInstance) =
       }
 
       // 4. Generate sequential job code
-      const lastJob = await tx.job.findFirst({
+      const existingJobs = await tx.job.findMany({
         where: { code: { startsWith: 'J-' } },
-        orderBy: { code: 'desc' },
         select: { code: true },
       });
-      const numPart = lastJob ? parseInt(lastJob.code.replace('J-', ''), 10) : 200;
-      const jobCode = `J-${isNaN(numPart) ? 201 : numPart + 1}`;
+      const jobCode = generateJobCode(existingJobs.map((j) => j.code));
 
       // 5. Create Job in DRAFT status (Strict ATS Rule: Never ACTIVE automatically!)
       const createdJob = await tx.job.create({
