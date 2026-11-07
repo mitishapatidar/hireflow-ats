@@ -101,5 +101,11 @@ export * from './client-workflows';
 // Data Governance, Custom Fields & Scoped Exports (Prompt 19)
 export * from './data-governance';
 
+// Sourcing, Bulk Import, Duplicate Review & Merging (Prompt 20)
+export * from './duplicates';
+export * from './merges';
+export * from './sourcing';
+export * from './sourcing-integrations';
+
 
 

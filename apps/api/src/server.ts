@@ -23,6 +23,7 @@ import { approvalRoutes } from './routes/approvals.js';
 import { managerRoutes } from './routes/manager.js';
 import { clientWorkflowRoutes } from './routes/client-workflows.js';
 import { governanceRoutes } from './routes/governance.js';
+import { sourcingRoutes } from './routes/sourcing.js';
 
 dotenv.config();
 
@@ -142,6 +143,7 @@ export function buildServer() {
   server.register(managerRoutes, { prefix: '/api/manager' });
   server.register(clientWorkflowRoutes, { prefix: '/api/clients' });
   server.register(governanceRoutes);
+  server.register(sourcingRoutes);
 
   return server;
 }

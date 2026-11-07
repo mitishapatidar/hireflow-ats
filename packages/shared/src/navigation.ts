@@ -49,6 +49,15 @@ export const INTERNAL_NAVIGATION_ITEMS: NavigationItem[] = [
     description: 'Candidate talent pool, sourcing, and resumes',
   },
   {
+    id: 'sourcing',
+    label: 'Sourcing & Ingestion',
+    path: '/sourcing',
+    icon: 'Compass',
+    allowedRoles: [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
+    section: 'WORKSPACE',
+    description: 'Bulk resume import, sourcing queue, and duplicate candidate merge',
+  },
+  {
     id: 'jobs',
     label: 'Jobs',
     path: '/jobs',
@@ -334,6 +343,7 @@ export function getDefaultRouteForRole(role: UserRole): string {
 export const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
   '/dashboard': [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
   '/candidates': [UserRole.RECRUITER, UserRole.ADMIN],
+  '/sourcing': [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
   '/jobs': [UserRole.RECRUITER, UserRole.ADMIN],
   '/interviews': [UserRole.RECRUITER, UserRole.ADMIN],
   '/submissions': [UserRole.RECRUITER, UserRole.ADMIN],

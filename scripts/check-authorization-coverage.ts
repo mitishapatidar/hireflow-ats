@@ -234,6 +234,30 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'GET', url: '/api/governance/cv/:candidateId/download', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT] },
   { method: 'GET', url: '/api/governance/audit-logs', isPublic: false, allowedRoles: [UserRole.ADMIN] },
   { method: 'POST', url: '/api/governance/audit-logs/export', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+
+  // Sourcing, Bulk Import, Duplicate Review & Chrome Extension (Prompt 20)
+  { method: 'POST', url: '/api/sourcing/import/batches', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/sourcing/import/batches', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/sourcing/import/batches/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/import/batches/:id/cancel', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/sourcing/import/items/:id/review', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/import/items/:id/create-candidate', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/sourcing/import/batches/:id/errors', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/duplicates/check', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/sourcing/duplicates', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/duplicates/:id/resolve-different', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/merges/preview', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/merges', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/sourcing/queue', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'PATCH', url: '/api/sourcing/queue/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/queue/:id/approve', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/queue/:id/reject', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/extension/token', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/extension/capture', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/sourcing/extension/duplicates/check', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/sourcing/integrations', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/sourcing/integrations/:provider/connect', isPublic: false, allowedRoles: [UserRole.ADMIN] },
+  { method: 'POST', url: '/api/sourcing/integrations/:provider/disconnect', isPublic: false, allowedRoles: [UserRole.ADMIN] },
 ];
 
 async function runAuthorizationAudit() {

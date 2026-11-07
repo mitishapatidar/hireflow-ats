@@ -30,12 +30,14 @@ import {
   FolderKanban,
   FileText,
   MessageSquare,
+  Compass,
   LucideProps,
 } from 'lucide-react';
 
 export const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   LayoutDashboard,
   Users,
+  Compass,
   Briefcase,
   Calendar,
   Send,

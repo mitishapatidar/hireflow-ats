@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HireFlow Sourcing Clipper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-row">
+        <div class="logo-icon">HF</div>
+        <div>
+          <h1 class="logo-title">HireFlow ATS</h1>
+          <p class="logo-subtitle">Sourcing Clipper</p>
+        </div>
+      </div>
+      <div id="auth-status-badge" class="badge badge-neutral">Checking auth...</div>
+    </header>
+
+    <!-- Token Entry Section (Shown if unauthenticated) -->
+    <div id="token-section" class="card hidden">
+      <h3>Connect to HireFlow</h3>
+      <p class="description">Generate a 15-minute capture token from your HireFlow Sourcing Workspace and paste it below:</p>
+      <div class="form-group">
+        <label for="token-input">Capture Token</label>
+        <input type="text" id="token-input" placeholder="Paste hf_cap_... token" class="input">
+      </div>
+      <div class="form-group">
+        <label for="api-url-input">HireFlow API Endpoint</label>
+        <input type="text" id="api-url-input" value="http://localhost:3001" class="input">
+      </div>
+      <button id="save-token-btn" class="btn btn-primary">Connect Extension</button>
+    </div>
+
+    <!-- Candidate Capture Section (Shown if authenticated) -->
+    <div id="capture-section" class="card hidden">
+      <div class="profile-header">
+        <div>
+          <h2 id="cand-name" class="candidate-name">Loading profile...</h2>
+          <p id="cand-headline" class="candidate-headline">Detecting from page...</p>
+        </div>
+      </div>
+
+      <div id="duplicate-alert" class="alert alert-warning hidden">
+        <strong>Potential Duplicate Detected:</strong>
+        <span id="duplicate-reason">Existing candidate found in database.</span>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Company</label>
+          <input type="text" id="input-company" class="input">
+        </div>
+        <div class="form-group">
+          <label>Job Title</label>
+          <input type="text" id="input-title" class="input">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="input-email" class="input" placeholder="Optional">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" id="input-phone" class="input" placeholder="Optional">
+        </div>
+        <div class="form-group">
+          <label>Location</label>
+          <input type="text" id="input-location" class="input">
+        </div>
+        <div class="form-group">
+          <label>Experience (Years)</label>
+          <input type="number" id="input-exp" class="input" min="0" max="50">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Skills Detected</label>
+        <div id="skills-container" class="skills-chips"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="input-notes">Recruiter Notes</label>
+        <textarea id="input-notes" class="input textarea" placeholder="Add sourcing notes or reasons for outreach..."></textarea>
+      </div>
+
+      <div class="footer-actions">
+        <button id="re-extract-btn" class="btn btn-outline">Refresh</button>
+        <button id="capture-btn" class="btn btn-primary">Clip to Sourcing Workspace</button>
+      </div>
+    </div>
+
+    <!-- Success Feedback Section -->
+    <div id="success-section" class="card hidden text-center">
+      <div class="success-icon">✓</div>
+      <h3>Candidate Added to Sourcing Queue!</h3>
+      <p class="description">Profile queued for review in Aureva Capital's Sourcing Workspace. It will not be added to active candidates until reviewed.</p>
+      <button id="clip-another-btn" class="btn btn-outline">Clip Another</button>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="alert alert-danger hidden"></div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -141,6 +141,9 @@ model Organization {
   otpChallenges          OtpChallenge[]
   downloadPolicies       DownloadPolicy[]
   exportRequests         ExportRequest[]
+  importBatches          ImportBatch[]
+  sourcingItems          SourcingItem[]
+  sourcingIntegrations   SourcingIntegration[]
 
   @@index([status])
 }
@@ -198,6 +201,7 @@ model User {
   recruiterTargets       RecruiterTarget[]         @relation("RecruiterTargets")
   otpChallenges          OtpChallenge[]
   exportRequests         ExportRequest[]
+  extensionTokens        ExtensionCaptureToken[]
 
   @@index([organizationId])
   @@index([role])
@@ -384,6 +388,13 @@ model Candidate {
   archivedAt        DateTime?
   archivedById      String?
   archiveReason     String?
+  mergedIntoCandidateId String?
+  mergedInto            Candidate?          @relation("CandidateMerges", fields: [mergedIntoCandidateId], references: [id], onDelete: SetNull)
+  mergedCandidates      Candidate[]         @relation("CandidateMerges")
+  isMerged              Boolean             @default(false)
+  mergedAt              DateTime?
+  mergedById            String?
+  mergeReason           String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   createdById       String?
@@ -400,6 +411,7 @@ model Candidate {
   @@index([ownerId])
   @@index([email])
   @@index([isArchived])
+  @@index([mergedIntoCandidateId])
   @@index([createdAt])
   @@index([ownerId, updatedAt])
 }
@@ -1536,53 +1548,171 @@ model ReportDelivery {
 }
 
 model ImportBatch {
-  id               String   @id @default(uuid())
-  fileName         String
-  importType       String
-  uploadedById     String
-  totalRecords     Int      @default(0)
-  processedRecords Int      @default(0)
-  failedRecords    Int      @default(0)
-  status           String   @default("PENDING")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdById      String?
+  id                 String       @id @default(uuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batchCode          String       @unique
+  fileName           String
+  importType         String       @default("BULK_RESUME") // BULK_RESUME, CSV, JOB_BOARD
+  uploadedById       String
+  totalRecords       Int          @default(0)
+  processedRecords   Int          @default(0)
+  parsedRecords      Int          @default(0)
+  duplicateRecords   Int          @default(0)
+  failedRecords      Int          @default(0)
+  pendingReviewCount Int          @default(0)
+  status             String       @default("CREATED") // CREATED, UPLOADING, QUEUED, PROCESSING, PARTIALLY_COMPLETED, COMPLETED, FAILED, CANCELLED
+  cancelledAt        DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  createdById        String?
 
   items ImportItem[]
 
+  @@index([organizationId])
   @@index([uploadedById])
   @@index([status])
 }
 
 model ImportItem {
-  id            String      @id @default(uuid())
-  importBatchId String
-  importBatch   ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
-  recordData    Json
-  status        String      @default("PENDING")
-  errorMessage  String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  createdById   String?
+  id                   String      @id @default(uuid())
+  organizationId       String
+  importBatchId        String
+  importBatch          ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  fileName             String
+  fileKey              String?
+  fileSize             Int?
+  mimeType             String?
+  fileChecksum         String?
+  recordData           Json?
+  parserConfidence     Decimal?    @db.Decimal(5, 2)
+  duplicateStatus      String      @default("NO_MATCH") // NO_MATCH, EXACT_DUPLICATE, POSSIBLE_DUPLICATE
+  duplicateCandidateId String?
+  duplicateScore       Decimal?    @db.Decimal(5, 2)
+  duplicateReasons     String[]    @default([])
+  status               String      @default("PENDING") // PENDING, PROCESSING, AWAITING_REVIEW, APPROVED, REJECTED, FAILED
+  errorMessage         String?
+  createdCandidateId   String?
+  reviewedById         String?
+  reviewedAt           DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  createdById          String?
 
+  @@index([organizationId])
   @@index([importBatchId])
   @@index([status])
+  @@index([duplicateStatus])
 }
 
 model DuplicatePair {
-  id                   String   @id @default(uuid())
+  id                   String    @id @default(uuid())
+  organizationId       String
   primaryCandidateId   String
   duplicateCandidateId String
-  matchScore           Decimal  @db.Decimal(5, 2)
-  matchReasons         String[] @default([])
-  status               String   @default("UNREVIEWED")
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  matchScore           Decimal   @db.Decimal(5, 2)
+  matchReasons         String[]  @default([])
+  status               String    @default("UNREVIEWED") // UNREVIEWED, RESOLVED_DIFFERENT, MERGED, IGNORED
+  resolvedAt           DateTime?
+  resolvedById         String?
+  mergeId              String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
   createdById          String?
 
+  @@index([organizationId])
   @@index([primaryCandidateId])
   @@index([duplicateCandidateId])
   @@index([status])
+}
+
+model CandidateMerge {
+  id                   String   @id @default(uuid())
+  organizationId       String
+  masterCandidateId    String
+  secondaryCandidateId String
+  mergedById           String
+  mergeReason          String
+  fieldsRetained       Json
+  preservedCounts      Json
+  createdAt            DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([masterCandidateId])
+  @@index([secondaryCandidateId])
+}
+
+model ExtensionCaptureToken {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  lastUsedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model SourcingItem {
+  id                   String       @id @default(uuid())
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source               String       // MANUAL_UPLOAD, BULK_IMPORT, CHROME_EXTENSION, INBOUND_EMAIL, NAUKRI, FOUNDIT
+  sourceMetadata       Json?
+  candidateName        String?
+  email                String?
+  phone                String?
+  currentCompany       String?
+  currentTitle         String?
+  location             String?
+  skills               String[]     @default([])
+  experienceYears      Decimal?     @db.Decimal(4, 1)
+  resumeStorageKey     String?
+  rawText              String?
+  assignedRecruiterId  String?
+  jobId                String?
+  tags                 String[]     @default([])
+  notes                String?
+  status               String       @default("PENDING_REVIEW") // PENDING_REVIEW, APPROVED, REJECTED
+  duplicateStatus      String       @default("NO_MATCH")
+  duplicateCandidateId String?
+  duplicateScore       Decimal?     @db.Decimal(5, 2)
+  duplicateReasons     String[]     @default([])
+  createdCandidateId   String?
+  reviewedById         String?
+  reviewedAt           DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([source])
+  @@index([status])
+  @@index([assignedRecruiterId])
+  @@index([jobId])
+}
+
+model SourcingIntegration {
+  id                   String       @id @default(uuid())
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider             String       // NAUKRI, FOUNDIT, INBOUND_EMAIL
+  status               String       @default("SETUP_REQUIRED") // CONNECTED, DISCONNECTED, SETUP_REQUIRED, ERROR
+  encryptedCredentials String?
+  config               Json?
+  lastSyncAt           DateTime?
+  lastError            String?
+  connectedById        String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
 }
 
 model DownloadPolicy {

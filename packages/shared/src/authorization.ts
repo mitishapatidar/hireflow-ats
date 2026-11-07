@@ -22,7 +22,11 @@ export type ResourceType =
   | 'report'
   | 'custom_field'
   | 'download_policy'
-  | 'data_export';
+  | 'data_export'
+  | 'sourcing'
+  | 'duplicate_management'
+  | 'candidate_merge'
+  | 'extension_capture';
 
 export interface AuthUser {
   id: string;
@@ -168,6 +172,16 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         return action === 'read' && resource.ownerId === user.id;
       }
 
+      // Sourcing, Duplicate Management, Candidate Merges, and Extension Captures
+      if (
+        resource.type === 'sourcing' ||
+        resource.type === 'duplicate_management' ||
+        resource.type === 'candidate_merge' ||
+        resource.type === 'extension_capture'
+      ) {
+        return action !== 'delete';
+      }
+
       return action === 'read';
     }
 
@@ -272,7 +286,11 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         resource.type === 'audit_log' ||
         resource.type === 'download_policy' ||
         resource.type === 'data_export' ||
-        resource.type === 'custom_field'
+        resource.type === 'custom_field' ||
+        resource.type === 'sourcing' ||
+        resource.type === 'duplicate_management' ||
+        resource.type === 'candidate_merge' ||
+        resource.type === 'extension_capture'
       ) {
         return false;
       }
@@ -333,6 +351,10 @@ export function can(user: AuthUser, action: AuthAction, resource: AuthResource):
         resource.type === 'download_policy' ||
         resource.type === 'data_export' ||
         resource.type === 'custom_field' ||
+        resource.type === 'sourcing' ||
+        resource.type === 'duplicate_management' ||
+        resource.type === 'candidate_merge' ||
+        resource.type === 'extension_capture' ||
         resource.type === 'report'
       ) {
         return false;

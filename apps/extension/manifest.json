@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "HireFlow ATS Sourcing Clipper",
+  "version": "1.0.0",
+  "description": "Capture candidates from job boards and professional profiles directly into the HireFlow Sourcing Workspace.",
+  "action": {
+    "default_title": "HireFlow ATS Clipper",
+    "default_popup": "src/popup/index.html"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "activeTab",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://*.linkedin.com/*",
+    "https://*.naukri.com/*",
+    "https://*.foundit.in/*",
+    "http://localhost:*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.linkedin.com/*",
+        "https://*.naukri.com/*",
+        "https://*.foundit.in/*"
+      ],
+      "js": ["src/content/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
