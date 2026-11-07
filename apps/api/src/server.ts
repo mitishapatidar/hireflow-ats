@@ -30,6 +30,7 @@ import { taskRoutes } from './routes/tasks.js';
 import { automationRoutes } from './routes/automation.js';
 import { slotInvitationRoutes } from './routes/slot-invitations.js';
 import { candidatePortalRoutes } from './routes/candidate-portal.js';
+import { reportsRoutes } from './routes/reports.js';
 
 dotenv.config();
 
@@ -156,6 +157,7 @@ export function buildServer() {
   server.register(automationRoutes, { prefix: '/api/automation' });
   server.register(slotInvitationRoutes, { prefix: '/api/slot-invitations' });
   server.register(candidatePortalRoutes, { prefix: '/api/candidate-portal' });
+  server.register(reportsRoutes, { prefix: '/api/reports' });
 
   return server;
 }

@@ -144,6 +144,8 @@ model Organization {
   importBatches          ImportBatch[]
   sourcingItems          SourcingItem[]
   sourcingIntegrations   SourcingIntegration[]
+  reportDefinitions      ReportDefinition[]
+  clientReportSchedules  ClientReportSchedule[]
 
   @@index([status])
 }
@@ -204,6 +206,10 @@ model User {
   extensionTokens        ExtensionCaptureToken[]
   dailyDigests           DailyDigest[]
   candidateProfile       Candidate?                @relation("CandidateUser")
+  reportsOwned           ReportDefinition[]        @relation("ReportOwner")
+  reportsSharedWith      ReportShare[]             @relation("ReportSharedWith")
+  clientReportsCreated   ClientReportSchedule[]    @relation("ClientReportCreator")
+  scheduleVersionsAuthored ClientReportScheduleVersion[] @relation("ScheduleVersionAuthor")
 
   @@index([organizationId])
   @@index([role])
@@ -566,6 +572,7 @@ model Client {
   placements     Placement[]
   recruiterActivities RecruiterActivity[]
   customFieldRules    ClientCustomFieldRule[]
+  reportSchedules     ClientReportSchedule[]
 
   @@index([organizationId])
   @@index([relationshipOwnerId])
@@ -1618,49 +1625,8 @@ model DailyDigest {
 }
 
 // ==========================================
-// MODULE J: REPORTING, IMPORTS & AUDIT
+// MODULE J: IMPORTS & AUDIT
 // ==========================================
-
-model ReportDefinition {
-  id          String   @id @default(uuid())
-  name        String
-  queryConfig Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdById String?
-
-  scheduledReports ScheduledReport[]
-}
-
-model ScheduledReport {
-  id                 String           @id @default(uuid())
-  reportDefinitionId String
-  reportDefinition   ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
-  cronExpression     String
-  recipients         String[]         @default([])
-  isActive           Boolean          @default(true)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  createdById        String?
-
-  deliveries ReportDelivery[]
-
-  @@index([reportDefinitionId])
-}
-
-model ReportDelivery {
-  id                String          @id @default(uuid())
-  scheduledReportId String
-  scheduledReport   ScheduledReport @relation(fields: [scheduledReportId], references: [id], onDelete: Cascade)
-  deliveredAt       DateTime        @default(now())
-  status            String          @default("DELIVERED")
-  fileUrl           String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  createdById       String?
-
-  @@index([scheduledReportId])
-}
 
 model ImportBatch {
   id                 String       @id @default(uuid())
@@ -1981,4 +1947,116 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([actorId])
   @@index([createdAt])
+}
+
+// ==========================================
+// PROMPT 26: CUSTOM REPORT BUILDER & SCHEDULED CLIENT REPORTS
+// ==========================================
+
+model ReportDefinition {
+  id              String        @id @default(uuid())
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownerId         String
+  owner           User          @relation("ReportOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  primaryEntity   String        // CANDIDATES, JOBS, APPLICATIONS, INTERVIEWS, SUBMISSIONS, CLIENTS, PLACEMENTS
+  linkedEntities  String[]      // e.g. ["APPLICATIONS", "JOBS"]
+  selectedColumns String[]      // e.g. ["name", "email", "job.title", "stage"]
+  groupBy         String?       // e.g. "job.clientName"
+  sortBy          String?       // e.g. "createdAt"
+  sortDirection   String        @default("desc") // asc | desc
+  filters         Json?         // { period, clientId, recruiterId, stage }
+  isShared        Boolean       @default(false)
+  shares          ReportShare[]
+  version         Int           @default(1)
+  isArchived      Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([ownerId])
+  @@index([isArchived])
+}
+
+model ReportShare {
+  id                 String           @id @default(uuid())
+  reportDefinitionId String
+  reportDefinition   ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
+  sharedWithUserId   String
+  sharedWithUser     User             @relation("ReportSharedWith", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+  createdAt          DateTime         @default(now())
+
+  @@unique([reportDefinitionId, sharedWithUserId])
+  @@index([sharedWithUserId])
+}
+
+model ClientReportSchedule {
+  id              String                        @id @default(uuid())
+  organizationId  String
+  organization    Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId        String
+  client          Client                        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  creatorId       String
+  creator         User                          @relation("ClientReportCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  name            String
+  frequency       String                        // DAILY, WEEKLY, MONTHLY
+  deliveryDay     String?                       // e.g. "MONDAY" or day of month "1"
+  deliveryTime    String                        // e.g. "09:00"
+  timezone        String                        @default("Asia/Kolkata")
+  period          String                        @default("LAST_7_DAYS") // LAST_7_DAYS, LAST_30_DAYS, MONTH_TO_DATE
+  recipientIds    String[]                      // Array of verified ClientContact IDs
+  includeSections String[]                      // ["JOB_PROGRESS", "SUBMITTED_PROFILES", "NEXT_STEPS"]
+  status          String                        @default("DRAFT") // DRAFT, ACTIVE, PAUSED, FAILED, ARCHIVED
+  lastDeliveredAt DateTime?
+  nextDeliveryAt  DateTime?
+  version         Int                           @default(1)
+  isArchived      Boolean                       @default(false)
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+  versions        ClientReportScheduleVersion[]
+  deliveries      ClientReportDelivery[]
+
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([status])
+  @@index([nextDeliveryAt])
+}
+
+model ClientReportScheduleVersion {
+  id          String               @id @default(uuid())
+  scheduleId  String
+  schedule    ClientReportSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  version     Int
+  snapshot    Json                 // Complete snapshot of schedule config
+  changedById String
+  changedBy   User                 @relation("ScheduleVersionAuthor", fields: [changedById], references: [id], onDelete: Cascade)
+  changeNotes String?
+  createdAt   DateTime             @default(now())
+
+  @@unique([scheduleId, version])
+}
+
+model ClientReportDelivery {
+  id              String               @id @default(uuid())
+  scheduleId      String
+  schedule        ClientReportSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  organizationId  String
+  idempotencyKey  String               @unique
+  scheduledFor    DateTime
+  executedAt      DateTime             @default(now())
+  recipientCount  Int                  @default(0)
+  successCount    Int                  @default(0)
+  failedCount     Int                  @default(0)
+  status          String               // PENDING, PROCESSING, SENT, FAILED, RETRYING, SKIPPED
+  retryCount      Int                  @default(0)
+  failureReason   String?
+  scheduleVersion Int                  @default(1)
+  exportFileKey   String?
+  metadata        Json?
+
+  @@index([scheduleId])
+  @@index([status])
+  @@index([scheduledFor])
 }

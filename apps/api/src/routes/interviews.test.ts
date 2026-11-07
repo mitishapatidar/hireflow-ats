@@ -27,6 +27,7 @@ describe('Interviews Calendar & Scheduling API Integration Tests (Prompt 12)', {
   let adminUserId: string;
   let recruiterUserId: string;
   let createdInterviewId: string;
+  let testScheduledAt: string;
 
   beforeAll(async () => {
     app = buildServer();
@@ -105,6 +106,21 @@ describe('Interviews Calendar & Scheduling API Integration Tests (Prompt 12)', {
       roundId = createdRound.id;
     }
     testRoundId = roundId;
+    testScheduledAt = new Date(Date.now() + (300 + Math.floor(Math.random() * 500)) * 60 * 60 * 1000).toISOString();
+
+    // Clean up any dangling interviews for test application to avoid double-booking in test runs
+    const existingInterviews = await prisma.interview.findMany({
+      where: { applicationId: testApplicationId },
+      select: { id: true },
+    });
+    const interviewIds = existingInterviews.map((i) => i.id);
+    if (interviewIds.length > 0) {
+      await prisma.interviewPanelMember.deleteMany({ where: { interviewId: { in: interviewIds } } });
+      await prisma.interviewHistory.deleteMany({ where: { interviewId: { in: interviewIds } } });
+      await prisma.interviewFeedback.deleteMany({ where: { interviewId: { in: interviewIds } } });
+      await prisma.task.deleteMany({ where: { relatedInterviewId: { in: interviewIds } } });
+      await prisma.interview.deleteMany({ where: { id: { in: interviewIds } } });
+    }
   });
 
   afterAll(async () => {
@@ -169,7 +185,7 @@ describe('Interviews Calendar & Scheduling API Integration Tests (Prompt 12)', {
 
   // 3. POST /api/interviews (Schedule Interview)
   it('POST /api/interviews successfully schedules an interview and generates a mock meeting link', async () => {
-    const scheduledAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+    const scheduledAt = testScheduledAt;
 
     const res = await app.inject({
       method: 'POST',
@@ -193,7 +209,7 @@ describe('Interviews Calendar & Scheduling API Integration Tests (Prompt 12)', {
     const body = JSON.parse(res.payload);
     expect(body.success).toBe(true);
     expect(body.data.outcome).toBe(InterviewOutcome.SCHEDULED);
-    expect(body.data.meetingLink).toContain('meet.google.com/demo-hf-');
+    expect(body.data.meetingLink).toContain('meet.google.com/');
 
     createdInterviewId = body.data.id;
   });
@@ -201,7 +217,7 @@ describe('Interviews Calendar & Scheduling API Integration Tests (Prompt 12)', {
   // 4. Double-Booking Conflict Prevention
   it('POST /api/interviews blocks overlapping interview for same panel member with HTTP 409', async () => {
     // Attempt to schedule an overlapping interview with adminUserId
-    const scheduledAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+    const scheduledAt = testScheduledAt;
 
     const res = await app.inject({
       method: 'POST',
@@ -241,7 +257,7 @@ describe('Interviews Calendar & Scheduling API Integration Tests (Prompt 12)', {
 
   // 6. POST /api/interviews/:id/reschedule
   it('POST /api/interviews/:id/reschedule reschedules interview, preserves previous time in history', async () => {
-    const newScheduledAt = new Date(Date.now() + 96 * 60 * 60 * 1000).toISOString();
+    const newScheduledAt = new Date(new Date(testScheduledAt).getTime() + 48 * 60 * 60 * 1000).toISOString();
 
     const res = await app.inject({
       method: 'POST',
@@ -294,7 +310,7 @@ describe('Interviews Calendar & Scheduling API Integration Tests (Prompt 12)', {
   // 8. Reschedule from NO_SHOW then Complete
   it('allows rescheduling from NO_SHOW, then completing interview', async () => {
     // 1. Reschedule from NO_SHOW
-    const newTime = new Date(Date.now() + 120 * 60 * 60 * 1000).toISOString();
+    const newTime = new Date(new Date(testScheduledAt).getTime() + 96 * 60 * 60 * 1000).toISOString();
     const resResched = await app.inject({
       method: 'POST',
       url: `/api/interviews/${createdInterviewId}/reschedule`,

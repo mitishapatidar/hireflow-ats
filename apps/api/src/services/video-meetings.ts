@@ -253,24 +253,26 @@ export async function sendInterviewConfirmation(
     method,
   });
 
-  // Dispatch notifications to candidate
-  await notificationQueue.dispatch({
-    userId: candidate.userId || 'candidate-placeholder',
-    recipientEmail: candidate.email,
-    category: NotificationCategoryEnum.INTERVIEW,
-    priority: 'HIGH',
-    title: isCancelled ? 'Interview Cancelled' : options.isReschedule ? 'Interview Rescheduled' : 'Interview Confirmed',
-    message: isCancelled
-      ? `Your interview for ${job.title} has been cancelled.`
-      : `Your interview for ${job.title} (${roundName}) is confirmed for ${formattedDateTime}.`,
-    linkUrl: '/my-dashboard',
-    channels: [NotificationChannelEnum.EMAIL, NotificationChannelEnum.IN_APP],
-    metadata: {
-      interviewId: interview.id,
-      meetingLink,
-      icsAttached: true,
-    },
-  });
+  // Dispatch notifications to candidate if they have an active user profile
+  if (candidate.userId) {
+    await notificationQueue.dispatch({
+      userId: candidate.userId,
+      recipientEmail: candidate.email,
+      category: NotificationCategoryEnum.INTERVIEW,
+      priority: 'HIGH',
+      title: isCancelled ? 'Interview Cancelled' : options.isReschedule ? 'Interview Rescheduled' : 'Interview Confirmed',
+      message: isCancelled
+        ? `Your interview for ${job.title} has been cancelled.`
+        : `Your interview for ${job.title} (${roundName}) is confirmed for ${formattedDateTime}.`,
+      linkUrl: '/my-dashboard',
+      channels: [NotificationChannelEnum.EMAIL, NotificationChannelEnum.IN_APP],
+      metadata: {
+        interviewId: interview.id,
+        meetingLink,
+        icsAttached: true,
+      },
+    });
+  }
 
   return { success: true, icsContent };
 }

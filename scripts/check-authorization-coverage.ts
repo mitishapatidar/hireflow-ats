@@ -305,6 +305,26 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'POST', url: '/api/slot-invitations/public/slots/:token/confirm', isPublic: true, publicReason: 'Candidate slot booking confirmation' },
   { method: 'GET', url: '/api/candidate-portal/me', isPublic: false, allowedRoles: [UserRole.CANDIDATE, UserRole.ADMIN] },
   { method: 'PATCH', url: '/api/candidate-portal/profile', isPublic: false, allowedRoles: [UserRole.CANDIDATE, UserRole.ADMIN] },
+
+  // Custom Report Builder & Scheduled Client Reports (Prompt 26)
+  { method: 'GET', url: '/api/reports/builder/config', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/reports/preview', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/reports/saved', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/reports/saved', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/reports/saved/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'PATCH', url: '/api/reports/saved/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'DELETE', url: '/api/reports/saved/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/reports/export', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/reports/client-schedules', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/reports/client-schedules', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/reports/client-schedules/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'PATCH', url: '/api/reports/client-schedules/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/reports/client-schedules/:id/preview', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/reports/client-schedules/:id/test', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/reports/client-schedules/:id/activate', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/reports/client-schedules/:id/pause', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/reports/client-schedules/:id/history', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/reports/client-schedules/:id/retry', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
 ];
 
 async function runAuthorizationAudit() {

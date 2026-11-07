@@ -129,6 +129,9 @@ export * from './slot-invitations';
 export * from './ics';
 export * from './candidate-portal';
 
+// Custom Report Builder & Scheduled Client Reports (Prompt 26)
+export * from './reports';
+
 
 
 

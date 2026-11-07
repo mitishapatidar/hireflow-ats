@@ -31,6 +31,8 @@ import {
   FileText,
   MessageSquare,
   Compass,
+  FileSpreadsheet,
+  CalendarClock,
   LucideProps,
 } from 'lucide-react';
 
@@ -64,6 +66,8 @@ export const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   FolderKanban,
   FileText,
   MessageSquare,
+  FileSpreadsheet,
+  CalendarClock,
 };
 
 interface NavIconProps extends LucideProps {
