@@ -22,7 +22,7 @@ export default function PublicRouteGroupLayout({
           <Link href="/portal" className="text-white/80 hover:text-white transition-colors">
             Client Portal
           </Link>
-          <Link href="/my-dashboard" className="text-white/80 hover:text-white transition-colors">
+          <Link href="/careers" className="text-white/80 hover:text-white transition-colors">
             Careers
           </Link>
         </div>

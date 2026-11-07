@@ -155,77 +155,78 @@ model Organization {
   placements             Placement[]
   handoverRequests       HandoverRequest[]
   ownershipHistories     OwnershipHistory[]
+  applicationDrafts      ApplicationDraft[]
 
   @@index([status])
 }
 
 model User {
-  id                String       @id @default(uuid())
-  email             String       @unique
-  name              String
-  passwordHash      String?
-  role              UserRole     @default(RECRUITER)
-  status            String       @default("ACTIVE")
-  organizationId    String
-  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  managerId         String?
-  manager           User?        @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
-  subordinates      User[]       @relation("UserManager")
-  teamId            String?
-  team              Team?        @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
-  twoFactorEnabled  Boolean      @default(false)
-  twoFactorSecret   String?
-  oauthProvider     String?
-  oauthId           String?
-  lastLoginAt       DateTime?
-  isArchived        Boolean      @default(false)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  createdById       String?
+  id               String       @id @default(uuid())
+  email            String       @unique
+  name             String
+  passwordHash     String?
+  role             UserRole     @default(RECRUITER)
+  status           String       @default("ACTIVE")
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  managerId        String?
+  manager          User?        @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  subordinates     User[]       @relation("UserManager")
+  teamId           String?
+  team             Team?        @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  twoFactorEnabled Boolean      @default(false)
+  twoFactorSecret  String?
+  oauthProvider    String?
+  oauthId          String?
+  lastLoginAt      DateTime?
+  isArchived       Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  createdById      String?
 
-  sessions               Session[]
-  invitationsSent        Invitation[]              @relation("InvitedByUser")
-  clientAccesses         ClientAccess[]
-  candidatesOwned        Candidate[]               @relation("CandidateOwner")
-  jobsOwned              Job[]                     @relation("JobOwner")
-  managedTeams           Team[]                    @relation("TeamManager")
-  jobAssignmentsReceived JobAssignment[]          @relation("JobRecruiterAssignment")
-  jobAssignmentsGiven    JobAssignment[]          @relation("JobAssigner")
-  reassignmentRequestsMade     JobReassignmentRequest[] @relation("ReassignmentRequestor")
-  reassignmentRequestsTargeted JobReassignmentRequest[] @relation("ReassignmentTarget")
-  reassignmentRequestsReviewed JobReassignmentRequest[] @relation("ReassignmentReviewer")
-  interviewPanels        InterviewPanelMember[]
-  interviewFeedbacks     InterviewFeedback[]
-  authoredProfileVersions SubmissionProfileVersion[] @relation("ProfileVersionAuthor")
-  tasksAssigned          Task[]                    @relation("TaskAssignee")
-  notifications          Notification[]
-  notificationPrefs      NotificationPreference[]
-  teamSignatures         TeamSignature[]
-  integrationAccounts    IntegrationAccount[]      @relation("UserIntegrationAccounts")
-  threadsAssigned        Thread[]                  @relation("ThreadAssignedRecruiter")
-  dailyActivities        DailyActivity[]
-  clientsOwned           Client[]                  @relation("ClientOwner")
-  opportunitiesOwned     Opportunity[]             @relation("OpportunityOwner")
-  opportunitiesConverted Opportunity[]             @relation("OpportunityConvertedBy")
-  meetingsOrganized      Meeting[]                 @relation("MeetingOrganizer")
-  recruiterActivities    RecruiterActivity[]       @relation("RecruiterLoggedActivities")
-  recruiterTargets       RecruiterTarget[]         @relation("RecruiterTargets")
-  otpChallenges          OtpChallenge[]
-  exportRequests         ExportRequest[]
-  extensionTokens        ExtensionCaptureToken[]
-  dailyDigests           DailyDigest[]
-  candidateProfile       Candidate?                @relation("CandidateUser")
-  reportsOwned           ReportDefinition[]        @relation("ReportOwner")
-  reportsSharedWith      ReportShare[]             @relation("ReportSharedWith")
-  clientReportsCreated   ClientReportSchedule[]    @relation("ClientReportCreator")
-  scheduleVersionsAuthored ClientReportScheduleVersion[] @relation("ScheduleVersionAuthor")
-  handoversSent          HandoverRequest[]         @relation("HandoverFromUser")
-  handoversReceived      HandoverRequest[]         @relation("HandoverToUser")
-  handoversRequested     HandoverRequest[]         @relation("HandoverRequestedBy")
-  handoversReviewed      HandoverRequest[]         @relation("HandoverReviewedBy")
-  ownershipTransfersFrom OwnershipHistory[]        @relation("OwnershipFromUser")
-  ownershipTransfersTo   OwnershipHistory[]        @relation("OwnershipToUser")
-  ownershipTransfersExecuted OwnershipHistory[]    @relation("OwnershipTransferredBy")
+  sessions                     Session[]
+  invitationsSent              Invitation[]                  @relation("InvitedByUser")
+  clientAccesses               ClientAccess[]
+  candidatesOwned              Candidate[]                   @relation("CandidateOwner")
+  jobsOwned                    Job[]                         @relation("JobOwner")
+  managedTeams                 Team[]                        @relation("TeamManager")
+  jobAssignmentsReceived       JobAssignment[]               @relation("JobRecruiterAssignment")
+  jobAssignmentsGiven          JobAssignment[]               @relation("JobAssigner")
+  reassignmentRequestsMade     JobReassignmentRequest[]      @relation("ReassignmentRequestor")
+  reassignmentRequestsTargeted JobReassignmentRequest[]      @relation("ReassignmentTarget")
+  reassignmentRequestsReviewed JobReassignmentRequest[]      @relation("ReassignmentReviewer")
+  interviewPanels              InterviewPanelMember[]
+  interviewFeedbacks           InterviewFeedback[]
+  authoredProfileVersions      SubmissionProfileVersion[]    @relation("ProfileVersionAuthor")
+  tasksAssigned                Task[]                        @relation("TaskAssignee")
+  notifications                Notification[]
+  notificationPrefs            NotificationPreference[]
+  teamSignatures               TeamSignature[]
+  integrationAccounts          IntegrationAccount[]          @relation("UserIntegrationAccounts")
+  threadsAssigned              Thread[]                      @relation("ThreadAssignedRecruiter")
+  dailyActivities              DailyActivity[]
+  clientsOwned                 Client[]                      @relation("ClientOwner")
+  opportunitiesOwned           Opportunity[]                 @relation("OpportunityOwner")
+  opportunitiesConverted       Opportunity[]                 @relation("OpportunityConvertedBy")
+  meetingsOrganized            Meeting[]                     @relation("MeetingOrganizer")
+  recruiterActivities          RecruiterActivity[]           @relation("RecruiterLoggedActivities")
+  recruiterTargets             RecruiterTarget[]             @relation("RecruiterTargets")
+  otpChallenges                OtpChallenge[]
+  exportRequests               ExportRequest[]
+  extensionTokens              ExtensionCaptureToken[]
+  dailyDigests                 DailyDigest[]
+  candidateProfile             Candidate?                    @relation("CandidateUser")
+  reportsOwned                 ReportDefinition[]            @relation("ReportOwner")
+  reportsSharedWith            ReportShare[]                 @relation("ReportSharedWith")
+  clientReportsCreated         ClientReportSchedule[]        @relation("ClientReportCreator")
+  scheduleVersionsAuthored     ClientReportScheduleVersion[] @relation("ScheduleVersionAuthor")
+  handoversSent                HandoverRequest[]             @relation("HandoverFromUser")
+  handoversReceived            HandoverRequest[]             @relation("HandoverToUser")
+  handoversRequested           HandoverRequest[]             @relation("HandoverRequestedBy")
+  handoversReviewed            HandoverRequest[]             @relation("HandoverReviewedBy")
+  ownershipTransfersFrom       OwnershipHistory[]            @relation("OwnershipFromUser")
+  ownershipTransfersTo         OwnershipHistory[]            @relation("OwnershipToUser")
+  ownershipTransfersExecuted   OwnershipHistory[]            @relation("OwnershipTransferredBy")
 
   @@index([organizationId])
   @@index([role])
@@ -385,52 +386,52 @@ model LoginAttempt {
 // ==========================================
 
 model Candidate {
-  id                String       @id @default(uuid())
-  code              String       @unique
-  name              String
-  email             String
-  phone             String?
-  currentTitle      String?
-  currentCompany    String?
-  experienceYears   Decimal?     @db.Decimal(4, 1)
-  currentSalary     Decimal?     @db.Decimal(12, 2)
-  expectedSalary    Decimal?     @db.Decimal(12, 2)
-  noticePeriod      String?
-  location          String?
-  skills            String[]     @default([])
-  source            String?
-  ownerId           String?
-  owner             User?        @relation("CandidateOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  userId            String?      @unique
-  user              User?        @relation("CandidateUser", fields: [userId], references: [id], onDelete: SetNull)
-  organizationId    String
-  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  consentRecordedAt DateTime?
-  whatsappOptIn     Boolean      @default(true)
-  whatsappOptInAt   DateTime?
-  smsOptIn          Boolean      @default(false)
-  smsOptInAt        DateTime?
-  isArchived        Boolean      @default(false)
-  archivedAt        DateTime?
-  archivedById      String?
-  archiveReason     String?
+  id                    String       @id @default(uuid())
+  code                  String       @unique
+  name                  String
+  email                 String
+  phone                 String?
+  currentTitle          String?
+  currentCompany        String?
+  experienceYears       Decimal?     @db.Decimal(4, 1)
+  currentSalary         Decimal?     @db.Decimal(12, 2)
+  expectedSalary        Decimal?     @db.Decimal(12, 2)
+  noticePeriod          String?
+  location              String?
+  skills                String[]     @default([])
+  source                String?
+  ownerId               String?
+  owner                 User?        @relation("CandidateOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  userId                String?      @unique
+  user                  User?        @relation("CandidateUser", fields: [userId], references: [id], onDelete: SetNull)
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  consentRecordedAt     DateTime?
+  whatsappOptIn         Boolean      @default(true)
+  whatsappOptInAt       DateTime?
+  smsOptIn              Boolean      @default(false)
+  smsOptInAt            DateTime?
+  isArchived            Boolean      @default(false)
+  archivedAt            DateTime?
+  archivedById          String?
+  archiveReason         String?
   mergedIntoCandidateId String?
-  mergedInto            Candidate?          @relation("CandidateMerges", fields: [mergedIntoCandidateId], references: [id], onDelete: SetNull)
-  mergedCandidates      Candidate[]         @relation("CandidateMerges")
-  isMerged              Boolean             @default(false)
+  mergedInto            Candidate?   @relation("CandidateMerges", fields: [mergedIntoCandidateId], references: [id], onDelete: SetNull)
+  mergedCandidates      Candidate[]  @relation("CandidateMerges")
+  isMerged              Boolean      @default(false)
   mergedAt              DateTime?
   mergedById            String?
   mergeReason           String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  createdById       String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  createdById           String?
 
-  notes        CandidateNote[]
-  tags         CandidateTag[]
-  documents    CandidateDocument[]
-  applications Application[]
-  threads      Thread[]
-  activities   CandidateActivity[]
+  notes               CandidateNote[]
+  tags                CandidateTag[]
+  documents           CandidateDocument[]
+  applications        Application[]
+  threads             Thread[]
+  activities          CandidateActivity[]
   recruiterActivities RecruiterActivity[]
 
   @@index([organizationId])
@@ -492,15 +493,15 @@ model CandidateDocument {
 
 model CustomFieldDefinition {
   id              String       @id @default(uuid())
-  entityType      String       // CANDIDATE, JOB, CLIENT
+  entityType      String // CANDIDATE, JOB, CLIENT
   fieldName       String
-  fieldKey        String?      // snake_case unique key (e.g. candidate_linkedin, expected_currency)
-  fieldType       String       // TEXT, NUMBER, DATE, URL, SELECT, MULTI_SELECT
+  fieldKey        String? // snake_case unique key (e.g. candidate_linkedin, expected_currency)
+  fieldType       String // TEXT, NUMBER, DATE, URL, SELECT, MULTI_SELECT
   description     String?
   options         String[]     @default([])
   isRequired      Boolean      @default(false)
   visibility      String       @default("INTERNAL_ONLY") // INTERNAL_ONLY, CLIENT_PROFILE_INCLUDED
-  validationRules Json?        // { minLength, maxLength, minValue, maxValue, pattern, maxItems }
+  validationRules Json? // { minLength, maxLength, minValue, maxValue, pattern, maxItems }
   defaultValue    Json?
   displayOrder    Int          @default(0)
   isActive        Boolean      @default(true)
@@ -554,38 +555,38 @@ model ClientCustomFieldRule {
 // ==========================================
 
 model Client {
-  id                  String        @id @default(uuid())
-  code                String        @unique
+  id                  String       @id @default(uuid())
+  code                String       @unique
   legalName           String
   industry            String?
   website             String?
   location            String?
   relationshipOwnerId String?
-  relationshipOwner   User?         @relation("ClientOwner", fields: [relationshipOwnerId], references: [id], onDelete: SetNull)
+  relationshipOwner   User?        @relation("ClientOwner", fields: [relationshipOwnerId], references: [id], onDelete: SetNull)
   organizationId      String
-  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  status              ClientStatus  @default(PROSPECT)
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  status              ClientStatus @default(PROSPECT)
   commercialTerms     String?
-  feePercentage       Decimal?      @db.Decimal(5, 2)
-  paymentTerms        String?       @default("NET_30")
+  feePercentage       Decimal?     @db.Decimal(5, 2)
+  paymentTerms        String?      @default("NET_30")
   relationshipNotes   String?
   nextStep            String?
-  isArchived          Boolean       @default(false)
+  isArchived          Boolean      @default(false)
   archivedAt          DateTime?
   archiveReason       String?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
   createdById         String?
 
-  contacts       ClientContact[]
-  documents      ClientDocument[]
-  workflows      ClientWorkflow[]
-  jobs           Job[]
-  clientAccesses ClientAccess[]
-  opportunities  Opportunity[]
-  meetings       Meeting[]
-  offers         Offer[]
-  placements     Placement[]
+  contacts            ClientContact[]
+  documents           ClientDocument[]
+  workflows           ClientWorkflow[]
+  jobs                Job[]
+  clientAccesses      ClientAccess[]
+  opportunities       Opportunity[]
+  meetings            Meeting[]
+  offers              Offer[]
+  placements          Placement[]
   recruiterActivities RecruiterActivity[]
   customFieldRules    ClientCustomFieldRule[]
   reportSchedules     ClientReportSchedule[]
@@ -755,41 +756,47 @@ model Job {
   reopenReason           String?
   approvedById           String?
   approvedAt             DateTime?
+  isPublished            Boolean        @default(false)
+  publishedAt            DateTime?
+  hideClientName         Boolean        @default(false)
+  isSalaryPublic         Boolean        @default(false)
   isArchived             Boolean        @default(false)
   archivedAt             DateTime?
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
   createdById            String?
 
-  rounds                 JobRound[]
-  assignments            JobAssignment[]
-  statusHistories        JobStatusHistory[]
-  reassignmentRequests   JobReassignmentRequest[]
-  applications           Application[]
-  threads                Thread[]
-  convertedFromOpportunity Opportunity?      @relation("OpportunityConvertedJob")
-  approvals              JobApproval[]
+  rounds                   JobRound[]
+  assignments              JobAssignment[]
+  statusHistories          JobStatusHistory[]
+  reassignmentRequests     JobReassignmentRequest[]
+  applications             Application[]
+  threads                  Thread[]
+  convertedFromOpportunity Opportunity?             @relation("OpportunityConvertedJob")
+  approvals                JobApproval[]
+  drafts                   ApplicationDraft[]
 
   @@index([organizationId])
   @@index([clientId])
   @@index([ownerId])
   @@index([status])
   @@index([isArchived])
+  @@index([isPublished, status, isArchived])
 }
 
 model JobRound {
-  id              String      @id @default(uuid())
+  id              String   @id @default(uuid())
   jobId           String
-  job             Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   name            String
   roundOrder      Int
-  interviewType   String      @default("VIDEO")
-  durationMinutes Int         @default(45)
-  panelMembers    String[]    @default([])
+  interviewType   String   @default("VIDEO")
+  durationMinutes Int      @default(45)
+  panelMembers    String[] @default([])
   description     String?
-  isArchived      Boolean     @default(false)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  isArchived      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   createdById     String?
 
   interviews Interview[]
@@ -800,17 +807,17 @@ model JobRound {
 }
 
 model JobAssignment {
-  id          String   @id @default(uuid())
-  jobId       String
-  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  recruiterId String
-  recruiter   User     @relation("JobRecruiterAssignment", fields: [recruiterId], references: [id], onDelete: Cascade)
+  id           String   @id @default(uuid())
+  jobId        String
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  recruiterId  String
+  recruiter    User     @relation("JobRecruiterAssignment", fields: [recruiterId], references: [id], onDelete: Cascade)
   assignedById String
-  assignedBy  User     @relation("JobAssigner", fields: [assignedById], references: [id], onDelete: Cascade)
-  status      String   @default("ACTIVE")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdById String?
+  assignedBy   User     @relation("JobAssigner", fields: [assignedById], references: [id], onDelete: Cascade)
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdById  String?
 
   @@unique([jobId, recruiterId])
   @@index([jobId])
@@ -858,19 +865,19 @@ model JobReassignmentRequest {
 }
 
 model JobApproval {
-  id                 String     @id @default(uuid())
+  id                 String    @id @default(uuid())
   jobId              String
-  job                Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job                Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
   reviewerId         String
-  decision           String     // "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"
+  decision           String // "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"
   comments           String?
-  jobVersion         Int        @default(1)
-  isInvalidated      Boolean    @default(false)
+  jobVersion         Int       @default(1)
+  isInvalidated      Boolean   @default(false)
   invalidatedAt      DateTime?
   invalidationReason String?
   approvedAt         DateTime?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
   createdById        String?
 
   @@index([jobId])
@@ -894,7 +901,7 @@ model Stage {
   updatedAt      DateTime          @updatedAt
   createdById    String?
 
-  applications   Application[]
+  applications Application[]
 
   @@index([organizationId])
   @@index([organizationId, isArchived, order])
@@ -903,6 +910,7 @@ model Stage {
 
 model Application {
   id                String            @id @default(uuid())
+  referenceNumber   String?           @unique
   candidateId       String
   candidate         Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   jobId             String
@@ -950,6 +958,25 @@ model ApplicationStageHistory {
   @@index([applicationId])
 }
 
+model ApplicationDraft {
+  id             String       @id @default(uuid())
+  token          String       @unique
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  formData       Json
+  resumeKey      String?
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([jobId])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([organizationId])
+}
+
 model RejectionReason {
   id          String   @id @default(uuid())
   code        String   @unique
@@ -971,18 +998,18 @@ model RejectionReason {
 // ==========================================
 
 model Interview {
-  id            String           @id @default(uuid())
-  applicationId String
-  application   Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  roundId       String?
-  round         JobRound?        @relation(fields: [roundId], references: [id], onDelete: SetNull)
-  scheduledAt   DateTime
-  duration      Int              @default(45)
-  timezone      String           @default("Asia/Kolkata")
-  mode          String           @default("VIDEO")
-  provider      String           @default("GOOGLE_MEET")
-  meetingLink   String?
-  outcome       InterviewOutcome @default(SCHEDULED)
+  id                  String           @id @default(uuid())
+  applicationId       String
+  application         Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  roundId             String?
+  round               JobRound?        @relation(fields: [roundId], references: [id], onDelete: SetNull)
+  scheduledAt         DateTime
+  duration            Int              @default(45)
+  timezone            String           @default("Asia/Kolkata")
+  mode                String           @default("VIDEO")
+  provider            String           @default("GOOGLE_MEET")
+  meetingLink         String?
+  outcome             InterviewOutcome @default(SCHEDULED)
   rescheduleReason    String?
   outcomeNotes        String?
   completedAt         DateTime?
@@ -992,9 +1019,9 @@ model Interview {
   previousScheduledAt DateTime?
   reminderConfig      Json?
   isArchived          Boolean          @default(false)
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  createdById   String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  createdById         String?
 
   panelMembers    InterviewPanelMember[]
   feedbacks       InterviewFeedback[]
@@ -1067,7 +1094,7 @@ model VideoMeeting {
   id             String    @id @default(uuid())
   interviewId    String    @unique
   interview      Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  provider       String    // GOOGLE_MEET | ZOOM | TEAMS | MOCK
+  provider       String // GOOGLE_MEET | ZOOM | TEAMS | MOCK
   externalId     String?
   joinUrl        String
   hostUrl        String?
@@ -1165,24 +1192,24 @@ model Submission {
 }
 
 model SubmissionApproval {
-  id                 String     @id @default(uuid())
-  submissionId       String
-  submission         Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  reviewerId         String
-  decision           String
+  id                    String     @id @default(uuid())
+  submissionId          String
+  submission            Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId            String
+  decision              String
   comments              String?
   profileVersion        Int?
   submissionVersion     Int?       @default(1)
   clientWorkflowVersion Int?       @default(1)
   validationSnapshot    Json?
   contentHash           String?
-  isInvalidated      Boolean    @default(false)
-  invalidatedAt      DateTime?
-  invalidationReason String?
-  approvedAt         DateTime?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-  createdById        String?
+  isInvalidated         Boolean    @default(false)
+  invalidatedAt         DateTime?
+  invalidationReason    String?
+  approvedAt            DateTime?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  createdById           String?
 
   @@index([submissionId])
   @@index([reviewerId])
@@ -1216,29 +1243,29 @@ model SubmissionProfileVersion {
 }
 
 model Offer {
-  id                String        @id @default(uuid())
-  applicationId     String
-  application       Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  clientId          String
-  client            Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  organizationId    String        @default("org-aureva-1")
-  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  offeredSalary     Decimal       @db.Decimal(12, 2)
-  joiningDate       DateTime?
-  releaseDate       DateTime?     @default(now())
-  expiryDate        DateTime?
-  acceptedAt        DateTime?
-  declinedAt        DateTime?
-  declineReason     String?
-  joinedAt          DateTime?
-  notes             String?
-  status            OfferStatus   @default(DRAFT)
-  offerDocumentUrl  String?
-  placementId       String?       @unique
-  placement         Placement?    @relation(fields: [placementId], references: [id], onDelete: SetNull)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  createdById       String?
+  id               String       @id @default(uuid())
+  applicationId    String
+  application      Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  clientId         String
+  client           Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  organizationId   String       @default("org-aureva-1")
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  offeredSalary    Decimal      @db.Decimal(12, 2)
+  joiningDate      DateTime?
+  releaseDate      DateTime?    @default(now())
+  expiryDate       DateTime?
+  acceptedAt       DateTime?
+  declinedAt       DateTime?
+  declineReason    String?
+  joinedAt         DateTime?
+  notes            String?
+  status           OfferStatus  @default(DRAFT)
+  offerDocumentUrl String?
+  placementId      String?      @unique
+  placement        Placement?   @relation(fields: [placementId], references: [id], onDelete: SetNull)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  createdById      String?
 
   @@index([applicationId])
   @@index([clientId])
@@ -1249,42 +1276,42 @@ model Offer {
 }
 
 model Placement {
-  id               String        @id @default(uuid())
-  applicationId    String        @unique
-  application      Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  clientId         String
-  client           Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  organizationId   String        @default("org-aureva-1")
-  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid())
+  applicationId  String       @unique
+  application    Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  organizationId String       @default("org-aureva-1")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Commercial Fee Snapshots
-  feeBasis         String        @default("PERCENTAGE")
-  ctcSnapshot      Decimal       @default(0) @db.Decimal(12, 2)
-  feePercentage    Decimal?      @db.Decimal(5, 2)
-  feeAmount        Decimal       @db.Decimal(12, 2)
-  adjustmentAmount Decimal?      @default(0) @db.Decimal(12, 2)
+  feeBasis         String   @default("PERCENTAGE")
+  ctcSnapshot      Decimal  @default(0) @db.Decimal(12, 2)
+  feePercentage    Decimal? @db.Decimal(5, 2)
+  feeAmount        Decimal  @db.Decimal(12, 2)
+  adjustmentAmount Decimal? @default(0) @db.Decimal(12, 2)
   adjustmentReason String?
 
   // Payment Tracking
-  paymentTerms     String        @default("NET_30")
-  dueDate          DateTime?
-  paymentStatus    PaymentStatus @default(PENDING)
-  paidAt           DateTime?
-  amountReceived   Decimal?      @default(0) @db.Decimal(12, 2)
-  invoiceNumber    String?
-  notes            String?
+  paymentTerms   String        @default("NET_30")
+  dueDate        DateTime?
+  paymentStatus  PaymentStatus @default(PENDING)
+  paidAt         DateTime?
+  amountReceived Decimal?      @default(0) @db.Decimal(12, 2)
+  invoiceNumber  String?
+  notes          String?
 
-  joiningDate      DateTime?
-  offer            Offer?
+  joiningDate DateTime?
+  offer       Offer?
 
   // Relations
   joiningConfirmation JoiningConfirmation?
   payments            PlacementPayment[]
   history             PlacementHistory[]
 
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  createdById      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
 
   @@index([applicationId])
   @@index([clientId])
@@ -1295,79 +1322,79 @@ model Placement {
 }
 
 model JoiningConfirmation {
-  id              String       @id @default(uuid())
-  placementId     String       @unique
-  placement       Placement    @relation(fields: [placementId], references: [id], onDelete: Cascade)
-  source          String       // "CLIENT_EMAIL" | "HR_CONFIRMATION" | "CLIENT_FINANCE" | "RECRUITER_VERIFIED"
-  confirmedBy     String
-  confirmedAt     DateTime     @default(now())
-  documentUrl     String?
-  notes           String?
-  createdAt       DateTime     @default(now())
-  createdById     String?
+  id          String    @id @default(uuid())
+  placementId String    @unique
+  placement   Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  source      String // "CLIENT_EMAIL" | "HR_CONFIRMATION" | "CLIENT_FINANCE" | "RECRUITER_VERIFIED"
+  confirmedBy String
+  confirmedAt DateTime  @default(now())
+  documentUrl String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  createdById String?
 
   @@index([placementId])
 }
 
 model PlacementPayment {
-  id              String       @id @default(uuid())
+  id              String    @id @default(uuid())
   placementId     String
-  placement       Placement    @relation(fields: [placementId], references: [id], onDelete: Cascade)
-  amount          Decimal      @db.Decimal(12, 2)
-  paymentDate     DateTime     @default(now())
-  paymentMethod   String?      // "BANK_TRANSFER" | "CHEQUE" | "UPI" | "CREDIT"
+  placement       Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  amount          Decimal   @db.Decimal(12, 2)
+  paymentDate     DateTime  @default(now())
+  paymentMethod   String? // "BANK_TRANSFER" | "CHEQUE" | "UPI" | "CREDIT"
   referenceNumber String?
   notes           String?
   createdById     String?
-  createdAt       DateTime     @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([placementId])
   @@index([paymentDate])
 }
 
 model PlacementHistory {
-  id            String       @id @default(uuid())
+  id            String    @id @default(uuid())
   placementId   String
-  placement     Placement    @relation(fields: [placementId], references: [id], onDelete: Cascade)
-  eventType     String       // "CREATED" | "STATUS_CHANGED" | "PAYMENT_RECORDED" | "TERMS_ADJUSTED" | "NOTE_ADDED"
+  placement     Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  eventType     String // "CREATED" | "STATUS_CHANGED" | "PAYMENT_RECORDED" | "TERMS_ADJUSTED" | "NOTE_ADDED"
   actorId       String?
   actorRole     String?
   previousState Json?
   newState      Json?
   notes         String?
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([placementId])
   @@index([createdAt])
 }
 
 model HandoverRequest {
-  id              String       @id @default(uuid())
-  organizationId  String       @default("org-aureva-1")
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  fromUserId      String
-  fromUser        User         @relation("HandoverFromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUserId        String
-  toUser          User         @relation("HandoverToUser", fields: [toUserId], references: [id], onDelete: Cascade)
-  status          String       @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED"
+  id             String       @id @default(uuid())
+  organizationId String       @default("org-aureva-1")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromUserId     String
+  fromUser       User         @relation("HandoverFromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId       String
+  toUser         User         @relation("HandoverToUser", fields: [toUserId], references: [id], onDelete: Cascade)
+  status         String       @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED"
 
   // Independent Selection IDs
-  candidateIds    Json         // string[]
-  jobIds          Json         // string[]
-  taskIds         Json         // string[]
+  candidateIds Json // string[]
+  jobIds       Json // string[]
+  taskIds      Json // string[]
 
-  notes           String?
-  reason          String?
+  notes  String?
+  reason String?
 
   requestedById   String
-  requestedBy     User         @relation("HandoverRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  requestedBy     User      @relation("HandoverRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
   reviewedById    String?
-  reviewedBy      User?        @relation("HandoverReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedBy      User?     @relation("HandoverReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt      DateTime?
   rejectionReason String?
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId])
   @@index([fromUserId])
@@ -1379,7 +1406,7 @@ model OwnershipHistory {
   id                String       @id @default(uuid())
   organizationId    String       @default("org-aureva-1")
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  entityType        String       // "CANDIDATE" | "JOB" | "TASK"
+  entityType        String // "CANDIDATE" | "JOB" | "TASK"
   entityId          String
   fromUserId        String?
   fromUser          User?        @relation("OwnershipFromUser", fields: [fromUserId], references: [id], onDelete: SetNull)
@@ -1403,42 +1430,42 @@ model OwnershipHistory {
 // ==========================================
 
 model Opportunity {
-  id                String             @id @default(uuid())
-  title             String             @default("New Business Mandate")
+  id                String           @id @default(uuid())
+  title             String           @default("New Business Mandate")
   companyName       String
   clientId          String?
-  client            Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client            Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
   primaryContactId  String?
-  primaryContact    ClientContact?     @relation(fields: [primaryContactId], references: [id], onDelete: SetNull)
+  primaryContact    ClientContact?   @relation(fields: [primaryContactId], references: [id], onDelete: SetNull)
   contactName       String?
   contactEmail      String?
   contactPhone      String?
   industry          String?
   location          String?
-  estimatedOpenings Int?               @default(1)
-  estimatedValue    Decimal?           @db.Decimal(12, 2)
+  estimatedOpenings Int?             @default(1)
+  estimatedValue    Decimal?         @db.Decimal(12, 2)
   expectedCloseDate DateTime?
   nextFollowUpAt    DateTime?
-  stage             OpportunityStage   @default(PROSPECTING)
-  priority          String             @default("MEDIUM")
+  stage             OpportunityStage @default(PROSPECTING)
+  priority          String           @default("MEDIUM")
   notes             String?
   ownerId           String
-  owner             User               @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner             User             @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   organizationId    String
-  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  isArchived        Boolean            @default(false)
-  convertedJobId    String?            @unique
-  convertedJob      Job?               @relation("OpportunityConvertedJob", fields: [convertedJobId], references: [id], onDelete: SetNull)
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  isArchived        Boolean          @default(false)
+  convertedJobId    String?          @unique
+  convertedJob      Job?             @relation("OpportunityConvertedJob", fields: [convertedJobId], references: [id], onDelete: SetNull)
   convertedAt       DateTime?
   convertedById     String?
-  convertedBy       User?              @relation("OpportunityConvertedBy", fields: [convertedById], references: [id], onDelete: SetNull)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  convertedBy       User?            @relation("OpportunityConvertedBy", fields: [convertedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
   createdById       String?
 
-  history           OpportunityHistory[]
-  meetings          Meeting[]
-  activities        RecruiterActivity[]
+  history    OpportunityHistory[]
+  meetings   Meeting[]
+  activities RecruiterActivity[]
 
   @@index([organizationId])
   @@index([clientId])
@@ -1449,36 +1476,36 @@ model Opportunity {
 }
 
 model OpportunityHistory {
-  id            String       @id @default(uuid())
+  id            String      @id @default(uuid())
   opportunityId String
-  opportunity   Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   action        String
   previousStage String?
   newStage      String?
   details       String?
   metadata      Json?
   actorId       String?
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime    @default(now())
 
   @@index([opportunityId])
   @@index([createdAt])
 }
 
 model Meeting {
-  id               String        @id @default(uuid())
+  id               String       @id @default(uuid())
   clientId         String?
-  client           Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client           Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
   opportunityId    String?
-  opportunity      Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   organizerId      String
-  organizer        User          @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer        User         @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
   title            String
   description      String?
-  meetingType      String?       @default("CLIENT_CHECK_IN")
-  status           String        @default("SCHEDULED")
+  meetingType      String?      @default("CLIENT_CHECK_IN")
+  status           String       @default("SCHEDULED")
   scheduledAt      DateTime
-  durationMinutes  Int           @default(30)
-  participants     String[]      @default([])
+  durationMinutes  Int          @default(30)
+  participants     String[]     @default([])
   contactName      String?
   contactEmail     String?
   notes            String?
@@ -1486,9 +1513,9 @@ model Meeting {
   nextAction       String?
   nextFollowUpAt   DateTime?
   calendarEventId  String?
-  calendarProvider String?       @default("DEMO_MODE")
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  calendarProvider String?      @default("DEMO_MODE")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
   createdById      String?
 
   @@index([clientId])
@@ -1518,7 +1545,7 @@ model Template {
   updatedAt             DateTime       @updatedAt
   createdById           String?
 
-  messages              Message[]
+  messages Message[]
 
   @@index([channel])
   @@index([category])
@@ -1561,7 +1588,7 @@ model Thread {
   updatedAt           DateTime       @updatedAt
   createdById         String?
 
-  messages            Message[]
+  messages Message[]
 
   @@index([candidateId])
   @@index([clientId])
@@ -1624,9 +1651,9 @@ model IntegrationAccount {
 }
 
 model CandidateActivity {
-  id          String           @id @default(uuid())
+  id          String            @id @default(uuid())
   candidateId String
-  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidate   Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   type        String
   channel     MessageChannel?
   direction   MessageDirection?
@@ -1634,7 +1661,7 @@ model CandidateActivity {
   description String?
   metadata    Json?
   actorId     String?
-  createdAt   DateTime         @default(now())
+  createdAt   DateTime          @default(now())
 
   @@index([candidateId])
   @@index([type])
@@ -1663,7 +1690,7 @@ model AutomationRule {
   updatedAt       DateTime @updatedAt
   createdById     String?
 
-  executions      AutomationExecution[]
+  executions AutomationExecution[]
 
   @@index([triggerEvent])
   @@index([isActive])
@@ -1673,9 +1700,9 @@ model AutomationRule {
 }
 
 model AutomationExecution {
-  id               String          @id @default(uuid())
+  id               String         @id @default(uuid())
   ruleId           String
-  rule             AutomationRule  @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  rule             AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   ruleVersion      Int
   triggerEvent     String
   relatedEntity    String?
@@ -1683,14 +1710,14 @@ model AutomationExecution {
   recipientId      String?
   recipientType    String?
   channel          String
-  status           String          @default("PENDING")
-  attemptCount     Int             @default(1)
-  idempotencyKey   String          @unique
+  status           String         @default("PENDING")
+  attemptCount     Int            @default(1)
+  idempotencyKey   String         @unique
   failureReason    String?
   providerResponse Json?
-  startedAt        DateTime        @default(now())
+  startedAt        DateTime       @default(now())
   completedAt      DateTime?
-  createdAt        DateTime        @default(now())
+  createdAt        DateTime       @default(now())
 
   @@index([ruleId])
   @@index([status])
@@ -1768,15 +1795,15 @@ model NotificationPreference {
 }
 
 model DailyDigest {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  digestDate  String
-  channel     String   @default("IN_APP")
-  itemsCount  Int      @default(0)
-  content     Json
-  status      String   @default("SENT")
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  digestDate String
+  channel    String   @default("IN_APP")
+  itemsCount Int      @default(0)
+  content    Json
+  status     String   @default("SENT")
+  createdAt  DateTime @default(now())
 
   @@unique([userId, digestDate, channel])
   @@index([userId])
@@ -1884,15 +1911,15 @@ model CandidateMerge {
 }
 
 model ExtensionCaptureToken {
-  id             String       @id @default(uuid())
+  id             String    @id @default(uuid())
   organizationId String
   userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash      String       @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String    @unique
   expiresAt      DateTime
   revokedAt      DateTime?
   lastUsedAt     DateTime?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime  @default(now())
 
   @@index([organizationId])
   @@index([userId])
@@ -1903,7 +1930,7 @@ model SourcingItem {
   id                   String       @id @default(uuid())
   organizationId       String
   organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  source               String       // MANUAL_UPLOAD, BULK_IMPORT, CHROME_EXTENSION, INBOUND_EMAIL, NAUKRI, FOUNDIT
+  source               String // MANUAL_UPLOAD, BULK_IMPORT, CHROME_EXTENSION, INBOUND_EMAIL, NAUKRI, FOUNDIT
   sourceMetadata       Json?
   candidateName        String?
   email                String?
@@ -1941,7 +1968,7 @@ model SourcingIntegration {
   id                   String       @id @default(uuid())
   organizationId       String
   organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  provider             String       // NAUKRI, FOUNDIT, INBOUND_EMAIL
+  provider             String // NAUKRI, FOUNDIT, INBOUND_EMAIL
   status               String       @default("SETUP_REQUIRED") // CONNECTED, DISCONNECTED, SETUP_REQUIRED, ERROR
   encryptedCredentials String?
   config               Json?
@@ -1959,7 +1986,7 @@ model DownloadPolicy {
   id                    String       @id @default(uuid())
   organizationId        String
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  role                  String       // RECRUITER, MANAGER, CLIENT, ADMIN
+  role                  String // RECRUITER, MANAGER, CLIENT, ADMIN
   dailyCvLimit          Int          @default(50)
   requireWatermark      Boolean      @default(true)
   watermarkPattern      String       @default("HIREFLOW / {{CLIENT_NAME}} / {{DATE}}")
@@ -1976,20 +2003,20 @@ model DownloadPolicy {
 model DownloadLog {
   id               String   @id @default(uuid())
   userId           String
-  resourceType     String   // CV, EXPORT, REPORT, CANDIDATE_DOCUMENT, CLIENT_DOCUMENT
+  resourceType     String // CV, EXPORT, REPORT, CANDIDATE_DOCUMENT, CLIENT_DOCUMENT
   resourceId       String
   organizationId   String?
-  entityType       String?  // CANDIDATE, CLIENT, JOB, EXPORT
+  entityType       String? // CANDIDATE, CLIENT, JOB, EXPORT
   entityId         String?
   documentId       String?
-  purpose          String?  // CLIENT_SUBMISSION, RECRUITER_REVIEW, AUDIT, COMPLIANCE
+  purpose          String? // CLIENT_SUBMISSION, RECRUITER_REVIEW, AUDIT, COMPLIANCE
   clientId         String?
   jobId            String?
-  fileFormat       String?  // PDF, CSV, XLSX, DOCX
+  fileFormat       String? // PDF, CSV, XLSX, DOCX
   watermarkApplied Boolean  @default(false)
   watermarkText    String?
   result           String   @default("SUCCESS") // SUCCESS, DENIED, FAILED
-  denialReason     String?  // DAILY_LIMIT_EXCEEDED, UNAUTHORIZED_SCOPE, REVERIFICATION_REQUIRED
+  denialReason     String? // DAILY_LIMIT_EXCEEDED, UNAUTHORIZED_SCOPE, REVERIFICATION_REQUIRED
   requestId        String?
   ipAddress        String?
   userAgent        String?
@@ -2009,17 +2036,17 @@ model ExportRequest {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId          String
   user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entityType      String       // CANDIDATES, JOBS, CLIENTS, APPLICATIONS, SUBMISSIONS, INTERVIEWS, PLACEMENTS, AUDIT_LOGS
+  entityType      String // CANDIDATES, JOBS, CLIENTS, APPLICATIONS, SUBMISSIONS, INTERVIEWS, PLACEMENTS, AUDIT_LOGS
   format          String       @default("CSV") // CSV, XLSX
   selectedColumns String[]
-  filters         Json?        // { dateRange: { start, end }, clientId, jobId, status }
+  filters         Json? // { dateRange: { start, end }, clientId, jobId, status }
   status          String       @default("PENDING") // PENDING, READY, FAILED, EXPIRED
-  fileKey         String?      // Randomized storage key in private storage
+  fileKey         String? // Randomized storage key in private storage
   fileName        String?
   fileSize        Int?
   rowCount        Int?
   downloadCount   Int          @default(0)
-  expiresAt       DateTime     // 24-hour retention
+  expiresAt       DateTime // 24-hour retention
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -2050,21 +2077,21 @@ model DailyActivity {
 }
 
 model RecruiterActivity {
-  id                   String        @id @default(uuid())
+  id                   String       @id @default(uuid())
   actorId              String
-  actor                User          @relation("RecruiterLoggedActivities", fields: [actorId], references: [id], onDelete: Cascade)
+  actor                User         @relation("RecruiterLoggedActivities", fields: [actorId], references: [id], onDelete: Cascade)
   organizationId       String
-  type                 String        // CALL, MEETING, TASK, NOTE
+  type                 String // CALL, MEETING, TASK, NOTE
   relatedCandidateId   String?
-  relatedCandidate     Candidate?    @relation(fields: [relatedCandidateId], references: [id], onDelete: SetNull)
+  relatedCandidate     Candidate?   @relation(fields: [relatedCandidateId], references: [id], onDelete: SetNull)
   relatedClientId      String?
-  relatedClient        Client?       @relation(fields: [relatedClientId], references: [id], onDelete: SetNull)
+  relatedClient        Client?      @relation(fields: [relatedClientId], references: [id], onDelete: SetNull)
   relatedOpportunityId String?
-  relatedOpportunity   Opportunity?  @relation(fields: [relatedOpportunityId], references: [id], onDelete: SetNull)
+  relatedOpportunity   Opportunity? @relation(fields: [relatedOpportunityId], references: [id], onDelete: SetNull)
   durationMinutes      Int?
   notes                String?
   outcome              String?
-  createdAt            DateTime      @default(now())
+  createdAt            DateTime     @default(now())
 
   @@index([actorId])
   @@index([organizationId])
@@ -2120,13 +2147,13 @@ model ReportDefinition {
   owner           User          @relation("ReportOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   name            String
   description     String?
-  primaryEntity   String        // CANDIDATES, JOBS, APPLICATIONS, INTERVIEWS, SUBMISSIONS, CLIENTS, PLACEMENTS
-  linkedEntities  String[]      // e.g. ["APPLICATIONS", "JOBS"]
-  selectedColumns String[]      // e.g. ["name", "email", "job.title", "stage"]
-  groupBy         String?       // e.g. "job.clientName"
-  sortBy          String?       // e.g. "createdAt"
+  primaryEntity   String // CANDIDATES, JOBS, APPLICATIONS, INTERVIEWS, SUBMISSIONS, CLIENTS, PLACEMENTS
+  linkedEntities  String[] // e.g. ["APPLICATIONS", "JOBS"]
+  selectedColumns String[] // e.g. ["name", "email", "job.title", "stage"]
+  groupBy         String? // e.g. "job.clientName"
+  sortBy          String? // e.g. "createdAt"
   sortDirection   String        @default("desc") // asc | desc
-  filters         Json?         // { period, clientId, recruiterId, stage }
+  filters         Json? // { period, clientId, recruiterId, stage }
   isShared        Boolean       @default(false)
   shares          ReportShare[]
   version         Int           @default(1)
@@ -2160,13 +2187,13 @@ model ClientReportSchedule {
   creatorId       String
   creator         User                          @relation("ClientReportCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   name            String
-  frequency       String                        // DAILY, WEEKLY, MONTHLY
-  deliveryDay     String?                       // e.g. "MONDAY" or day of month "1"
-  deliveryTime    String                        // e.g. "09:00"
+  frequency       String // DAILY, WEEKLY, MONTHLY
+  deliveryDay     String? // e.g. "MONDAY" or day of month "1"
+  deliveryTime    String // e.g. "09:00"
   timezone        String                        @default("Asia/Kolkata")
   period          String                        @default("LAST_7_DAYS") // LAST_7_DAYS, LAST_30_DAYS, MONTH_TO_DATE
-  recipientIds    String[]                      // Array of verified ClientContact IDs
-  includeSections String[]                      // ["JOB_PROGRESS", "SUBMITTED_PROFILES", "NEXT_STEPS"]
+  recipientIds    String[] // Array of verified ClientContact IDs
+  includeSections String[] // ["JOB_PROGRESS", "SUBMITTED_PROFILES", "NEXT_STEPS"]
   status          String                        @default("DRAFT") // DRAFT, ACTIVE, PAUSED, FAILED, ARCHIVED
   lastDeliveredAt DateTime?
   nextDeliveryAt  DateTime?
@@ -2188,7 +2215,7 @@ model ClientReportScheduleVersion {
   scheduleId  String
   schedule    ClientReportSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
   version     Int
-  snapshot    Json                 // Complete snapshot of schedule config
+  snapshot    Json // Complete snapshot of schedule config
   changedById String
   changedBy   User                 @relation("ScheduleVersionAuthor", fields: [changedById], references: [id], onDelete: Cascade)
   changeNotes String?
@@ -2208,7 +2235,7 @@ model ClientReportDelivery {
   recipientCount  Int                  @default(0)
   successCount    Int                  @default(0)
   failedCount     Int                  @default(0)
-  status          String               // PENDING, PROCESSING, SENT, FAILED, RETRYING, SKIPPED
+  status          String // PENDING, PROCESSING, SENT, FAILED, RETRYING, SKIPPED
   retryCount      Int                  @default(0)
   failureReason   String?
   scheduleVersion Int                  @default(1)

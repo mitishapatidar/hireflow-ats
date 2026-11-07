@@ -18,6 +18,8 @@
 | **Mobile Pipeline Switcher** | Full | Full | Assigned Jobs | ❌ BLOCKED | ❌ BLOCKED | Horizontal stage pills with swipeable candidate cards. |
 | **Custom Report Builder** | Full | Full | Non-sensitive | ❌ BLOCKED | ❌ BLOCKED | Cross-entity datasets, 5-row live preview, CSV/ExcelML. |
 | **Scheduled Client Reports** | Full | Full | ❌ BLOCKED | Recipient | ❌ BLOCKED | 13-point authorization check, automated delivery. |
+| **Public Careers Site & Branding** | Full | Full | View | View | Public Unauth | Public endpoints scrub client confidential data and internal fields. |
+| **Public Candidate Application** | Full | Full | Assigned Candidate | ❌ BLOCKED | Submit / Self | Unauthenticated public application submission with honeypot & CAPTCHA. |
 | **Interviews & Video Meetings** | Full | Team Scope | Assigned Only | Scheduled Only | Self Only | Automated Meet/Zoom/Teams link creation upon persistence. |
 | **Candidate Self-Scheduling** | Full | Full | Manage Slots | ❌ BLOCKED | Self Book | Secure expiring token links, Google/Outlook sync. |
 | **User Administration** | Full | Team Hierarchy | ❌ BLOCKED | ❌ BLOCKED | ❌ BLOCKED | Only Admin can create users and invite members. |

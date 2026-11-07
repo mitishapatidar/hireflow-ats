@@ -20,6 +20,13 @@ async function main() {
         timezone: 'Asia/Kolkata',
         dateFormat: 'DD/MM/YYYY',
         companyRegistration: 'U65999MH2024PTC123456',
+        careersBranding: {
+          headline: 'Explore Open Technology Mandates',
+          introductoryCopy: 'HireFlow partners with fast-growing venture-backed startups and enterprises to source top engineering and product talent.',
+          brandPrimaryColor: '#5B49D6',
+          brandSecondaryColor: '#1E2A4A',
+          footerCopy: '© 2026 Aureva Capital Private Limited. Powered by HireFlow ATS.',
+        },
       },
     },
   });
@@ -326,6 +333,10 @@ async function main() {
       salaryMin: 3500000,
       salaryMax: 4500000,
       status: JobStatus.ACTIVE,
+      isPublished: true,
+      publishedAt: new Date('2026-11-01T10:00:00Z'),
+      isSalaryPublic: true,
+      hideClientName: false,
     },
     {
       id: 'job-j202',
@@ -341,6 +352,10 @@ async function main() {
       salaryMin: 2800000,
       salaryMax: 3800000,
       status: JobStatus.ACTIVE,
+      isPublished: true,
+      publishedAt: new Date('2026-11-01T10:00:00Z'),
+      isSalaryPublic: true,
+      hideClientName: false,
     },
     {
       id: 'job-j203',
@@ -355,6 +370,10 @@ async function main() {
       salaryMin: 4800000,
       salaryMax: 6000000,
       status: JobStatus.ACTIVE,
+      isPublished: true,
+      publishedAt: new Date('2026-11-01T10:00:00Z'),
+      isSalaryPublic: false,
+      hideClientName: true, // Confidential client
     },
     {
       id: 'job-j204',
@@ -369,6 +388,10 @@ async function main() {
       salaryMin: 4000000,
       salaryMax: 5200000,
       status: JobStatus.ACTIVE,
+      isPublished: true,
+      publishedAt: new Date('2026-11-01T10:00:00Z'),
+      isSalaryPublic: false,
+      hideClientName: false,
     },
     {
       id: 'job-j205',
@@ -383,6 +406,10 @@ async function main() {
       salaryMin: 3800000,
       salaryMax: 4800000,
       status: JobStatus.ACTIVE,
+      isPublished: true,
+      publishedAt: new Date('2026-11-01T10:00:00Z'),
+      isSalaryPublic: false,
+      hideClientName: false,
     },
     {
       id: 'job-j206',
@@ -397,6 +424,10 @@ async function main() {
       salaryMin: 3000000,
       salaryMax: 4000000,
       status: JobStatus.ACTIVE,
+      isPublished: false, // Active but unpublished
+      publishedAt: null,
+      isSalaryPublic: false,
+      hideClientName: false,
     },
     {
       id: 'job-j207',
@@ -411,6 +442,10 @@ async function main() {
       salaryMin: 3200000,
       salaryMax: 4200000,
       status: JobStatus.DRAFT,
+      isPublished: false,
+      publishedAt: null,
+      isSalaryPublic: false,
+      hideClientName: false,
     },
     {
       id: 'job-j208',
@@ -425,6 +460,10 @@ async function main() {
       salaryMin: 2200000,
       salaryMax: 2800000,
       status: JobStatus.PAUSED,
+      isPublished: false,
+      publishedAt: null,
+      isSalaryPublic: false,
+      hideClientName: false,
       closingReason: 'Temporarily on hold pending Q1 budget re-allocation.',
     },
   ];
@@ -432,7 +471,12 @@ async function main() {
   for (const jd of jobDefinitions) {
     await prisma.job.upsert({
       where: { code: jd.code },
-      update: {},
+      update: {
+        isPublished: jd.isPublished,
+        publishedAt: jd.publishedAt,
+        hideClientName: jd.hideClientName,
+        isSalaryPublic: jd.isSalaryPublic,
+      },
       create: jd,
     });
   }

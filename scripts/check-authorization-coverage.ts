@@ -363,6 +363,15 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'POST', url: '/api/handover/requests/:id/cancel', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'GET', url: '/api/handover/recruiter-resources/:recruiterId', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'GET', url: '/api/handover/ownership-history', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+
+  // Prompt 28: Branded Public Careers Site & Application Workflow
+  { method: 'GET', url: '/api/public/careers/branding', isPublic: true, publicReason: 'Branded careers portal styling & introductory copy' },
+  { method: 'GET', url: '/api/public/careers/jobs', isPublic: true, publicReason: 'Public job listings search & filtering' },
+  { method: 'GET', url: '/api/public/careers/jobs/:slugOrId', isPublic: true, publicReason: 'Public job details & description' },
+  { method: 'POST', url: '/api/public/careers/upload', isPublic: true, publicReason: 'Public resume upload with security & magic byte validation' },
+  { method: 'POST', url: '/api/public/careers/applications/draft', isPublic: true, publicReason: 'Save application draft without pipeline placement' },
+  { method: 'GET', url: '/api/public/careers/applications/draft/:token', isPublic: true, publicReason: 'Resume application draft using secure token' },
+  { method: 'POST', url: '/api/public/careers/applications/submit', isPublic: true, publicReason: 'Public candidate application intake with CAPTCHA & honeypot' },
 ];
 
 async function runAuthorizationAudit() {
