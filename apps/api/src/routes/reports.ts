@@ -15,6 +15,7 @@ import {
 import { requireRole } from '../plugins/auth.js';
 import { executeReportQuery, fetchClientReportData } from '../services/report-builder.js';
 import { clientReportQueue } from '../queue/client-report-queue.js';
+import { MetricsService } from '../services/metrics.js';
 
 export const reportsRoutes: FastifyPluginAsync = async (server: FastifyInstance) => {
   // Helper: Write Audit Log
@@ -907,6 +908,62 @@ export const reportsRoutes: FastifyPluginAsync = async (server: FastifyInstance)
         success: result.status === 'SENT',
         data: result,
       });
+    }
+  );
+
+  // ==========================================
+  // 3. PROMPT 21: RECRUITMENT BI & ANALYTICS
+  // ==========================================
+
+  // GET /api/reports/analytics/overview — 4 Core Recruitment KPIs (Frame 10)
+  server.get(
+    '/analytics/overview',
+    {
+      preHandler: [(server as any).authenticate, requireRole(UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER)],
+    },
+    async (request, reply) => {
+      const user = (request as any).user;
+      const kpis = await MetricsService.getRecruitmentOverviewKPIs(user.id, user.role, user.organizationId);
+      return reply.send({ success: true, data: kpis });
+    }
+  );
+
+  // GET /api/reports/analytics/funnel — Pipeline Stage Conversion Funnel (Frame 10)
+  server.get(
+    '/analytics/funnel',
+    {
+      preHandler: [(server as any).authenticate, requireRole(UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER)],
+    },
+    async (request, reply) => {
+      const user = (request as any).user;
+      const data = await MetricsService.getRecruiterDashboardData(user.id, user.role, user.organizationId);
+      return reply.send({ success: true, data: data.pipelineDistribution });
+    }
+  );
+
+  // GET /api/reports/analytics/leaderboard — Recruiter Performance Leaderboard (Frame 10)
+  server.get(
+    '/analytics/leaderboard',
+    {
+      preHandler: [(server as any).authenticate, requireRole(UserRole.ADMIN, UserRole.MANAGER)],
+    },
+    async (request, reply) => {
+      const user = (request as any).user;
+      const leaderboard = await MetricsService.getRecruiterLeaderboard(user.organizationId);
+      return reply.send({ success: true, data: leaderboard });
+    }
+  );
+
+  // GET /api/reports/analytics/mis — Manager MIS Data (Frame 39)
+  server.get(
+    '/analytics/mis',
+    {
+      preHandler: [(server as any).authenticate, requireRole(UserRole.ADMIN, UserRole.MANAGER)],
+    },
+    async (request, reply) => {
+      const user = (request as any).user;
+      const mis = await MetricsService.getManagerMisData(user.id, user.role, user.organizationId);
+      return reply.send({ success: true, data: mis });
     }
   );
 };

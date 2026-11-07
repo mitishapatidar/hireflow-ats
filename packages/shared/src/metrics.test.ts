@@ -6,6 +6,9 @@ import {
   calculateMonthOverMonthDelta,
   calculateTargetProgress,
   formatAsOfTimestamp,
+  calculateTimeToHire,
+  calculateConversionRate,
+  calculateOfferAcceptanceRate,
 } from './metrics';
 
 describe('Prompt 15 — Centralized Shared Metrics Engine Tests', () => {
@@ -93,6 +96,37 @@ describe('Prompt 15 — Centralized Shared Metrics Engine Tests', () => {
       const formatted = formatAsOfTimestamp(refDate);
       expect(formatted).toContain('06 Nov 2026');
       expect(formatted).toContain('06:30 PM IST');
+    });
+  });
+
+  describe('Prompt 21 — Recruitment BI & Analytics Functions', () => {
+    it('calculates average Time to Hire accurately across joined records', () => {
+      const records = [
+        { createdAt: '2026-10-01T00:00:00Z', joinedAt: '2026-10-21T00:00:00Z' }, // 20 days
+        { createdAt: '2026-10-01T00:00:00Z', joinedAt: '2026-10-31T00:00:00Z' }, // 30 days
+      ];
+      expect(calculateTimeToHire(records)).toBe(25);
+    });
+
+    it('returns 0 for Time to Hire when no joined records exist', () => {
+      expect(calculateTimeToHire([])).toBe(0);
+      expect(calculateTimeToHire([{ createdAt: '2026-10-01T00:00:00Z', joinedAt: null }])).toBe(0);
+    });
+
+    it('calculates conversion rate with 1 decimal precision and zero safety', () => {
+      expect(calculateConversionRate(15, 30)).toBe(50);
+      expect(calculateConversionRate(1, 3)).toBe(33.3);
+      expect(calculateConversionRate(0, 0)).toBe(0);
+      expect(calculateConversionRate(5, 0)).toBe(0);
+    });
+
+    it('calculates Offer Acceptance Rate correctly', () => {
+      // 8 accepted, 2 joined, 12 released, 2 withdrawn => 10 / (12 - 2) = 100%
+      expect(calculateOfferAcceptanceRate(8, 2, 12, 2)).toBe(100);
+      // 4 accepted, 0 joined, 10 released, 0 withdrawn => 40%
+      expect(calculateOfferAcceptanceRate(4, 0, 10, 0)).toBe(40);
+      // 0 released
+      expect(calculateOfferAcceptanceRate(0, 0, 0, 0)).toBe(0);
     });
   });
 });

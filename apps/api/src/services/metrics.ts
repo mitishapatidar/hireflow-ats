@@ -3,6 +3,8 @@ import {
   UserRole,
   JobStatus,
   InterviewOutcome,
+  OfferStatus,
+  PaymentStatus,
   getISTMonthBoundaries,
   getPreviousISTMonthBoundaries,
   getISTWeekBoundaries,
@@ -10,11 +12,18 @@ import {
   calculateMonthOverMonthDelta,
   calculateTargetProgress,
   formatAsOfTimestamp,
+  calculateTimeToHire,
+  calculateConversionRate,
+  calculateOfferAcceptanceRate,
   KpiCardData,
   PipelineStageCount,
   TodayAgendaItem,
   RecentCandidateActivityItem,
   RecruiterDailyActivitySummary,
+  RecruitmentOverviewKPIs,
+  RecruiterLeaderboardRow,
+  ManagerMisData,
+  OffersDashboardStats,
 } from '@hireflow/shared';
 
 export class MetricsService {
@@ -483,6 +492,363 @@ export class MetricsService {
       submissionsSent: submissionsProgress,
       interviewsCompleted: interviewsProgress,
       overallScorePercentage: overallScore,
+    };
+  }
+
+  /**
+   * Fetches real live statistics for the Offers & Placements Dashboard (Frame 08).
+   */
+  static async getOffersDashboardData(
+    userId: string,
+    role: UserRole,
+    organizationId: string
+  ): Promise<OffersDashboardStats> {
+    const isRestrictedRecruiter = role === UserRole.RECRUITER;
+    const now = new Date();
+    const currentMonth = getISTMonthBoundaries(now);
+    const prevMonth = getPreviousISTMonthBoundaries(now);
+
+    const baseOfferScope: any = {
+      organizationId,
+      ...(isRestrictedRecruiter ? { application: { job: { ownerId: userId } } } : {}),
+    };
+
+    const [
+      releasedMtd,
+      prevReleased,
+      acceptedMtd,
+      pendingOffers,
+      placementsMtd,
+    ] = await Promise.all([
+      // 1. Released MTD
+      prisma.offer.count({
+        where: {
+          ...baseOfferScope,
+          status: { in: [OfferStatus.RELEASED, OfferStatus.SENT, OfferStatus.ACCEPTED, OfferStatus.JOINED] },
+          releaseDate: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+        },
+      }),
+      // 2. Released Prev Month
+      prisma.offer.count({
+        where: {
+          ...baseOfferScope,
+          status: { in: [OfferStatus.RELEASED, OfferStatus.SENT, OfferStatus.ACCEPTED, OfferStatus.JOINED] },
+          releaseDate: { gte: prevMonth.startUtc, lte: prevMonth.endUtc },
+        },
+      }),
+      // 3. Accepted MTD
+      prisma.offer.count({
+        where: {
+          ...baseOfferScope,
+          status: { in: [OfferStatus.ACCEPTED, OfferStatus.JOINED] },
+          acceptedAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+        },
+      }),
+      // 4. Pending Offers (Awaiting response)
+      prisma.offer.count({
+        where: {
+          ...baseOfferScope,
+          status: { in: [OfferStatus.RELEASED, OfferStatus.SENT] },
+        },
+      }),
+      // 5. Placements MTD (strictly JOINED / placed)
+      prisma.placement.findMany({
+        where: {
+          organizationId,
+          ...(isRestrictedRecruiter ? { application: { job: { ownerId: userId } } } : {}),
+          createdAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+        },
+        select: { feeAmount: true },
+      }),
+    ]);
+
+    const releasedDelta = calculateMonthOverMonthDelta(releasedMtd, prevReleased, 'vs last month');
+    const acceptedRate = calculateConversionRate(acceptedMtd, releasedMtd);
+    const totalPlacementFeeMtd = placementsMtd.reduce((sum, p) => sum + Number(p.feeAmount), 0);
+
+    return {
+      releasedMtd,
+      releasedDelta,
+      acceptedMtd,
+      acceptedRate,
+      pendingOffers,
+      confirmedPlacementsMtd: placementsMtd.length,
+      totalPlacementFeeMtd,
+      asOfTimestamp: formatAsOfTimestamp(now),
+    };
+  }
+
+  /**
+   * Fetches the 4 high-level recruitment efficiency metrics for Reports (Frame 10).
+   */
+  static async getRecruitmentOverviewKPIs(
+    userId: string,
+    role: UserRole,
+    organizationId: string
+  ): Promise<RecruitmentOverviewKPIs> {
+    const isRestrictedRecruiter = role === UserRole.RECRUITER;
+    const now = new Date();
+    const currentMonth = getISTMonthBoundaries(now);
+    const prevMonth = getPreviousISTMonthBoundaries(now);
+
+    const baseAppScope: any = {
+      job: {
+        organizationId,
+        ...(isRestrictedRecruiter ? { ownerId: userId } : {}),
+      },
+    };
+
+    // Parallel fetch for current and previous month cohorts
+    const [
+      joinedCurrent,
+      joinedPrev,
+      submissionsCurrent,
+      submissionsPrev,
+      interviewedCurrent,
+      interviewedPrev,
+      offersCurrent,
+      offersPrev,
+      offersAcceptedCurrent,
+      offersAcceptedPrev,
+    ] = await Promise.all([
+      // Current Joined Applications (for Time to Hire)
+      prisma.application.findMany({
+        where: {
+          ...baseAppScope,
+          status: 'PLACED',
+          updatedAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+        },
+        select: { createdAt: true, updatedAt: true },
+      }),
+      // Prev Joined Applications
+      prisma.application.findMany({
+        where: {
+          ...baseAppScope,
+          status: 'PLACED',
+          updatedAt: { gte: prevMonth.startUtc, lte: prevMonth.endUtc },
+        },
+        select: { createdAt: true, updatedAt: true },
+      }),
+      // Submissions
+      prisma.submission.count({
+        where: {
+          application: baseAppScope,
+          createdAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+        },
+      }),
+      prisma.submission.count({
+        where: {
+          application: baseAppScope,
+          createdAt: { gte: prevMonth.startUtc, lte: prevMonth.endUtc },
+        },
+      }),
+      // Submissions that converted to Interview
+      prisma.interview.count({
+        where: {
+          application: baseAppScope,
+          createdAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+        },
+      }),
+      prisma.interview.count({
+        where: {
+          application: baseAppScope,
+          createdAt: { gte: prevMonth.startUtc, lte: prevMonth.endUtc },
+        },
+      }),
+      // Offers Released
+      prisma.offer.count({
+        where: {
+          organizationId,
+          releaseDate: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+          ...(isRestrictedRecruiter ? { application: { job: { ownerId: userId } } } : {}),
+        },
+      }),
+      prisma.offer.count({
+        where: {
+          organizationId,
+          releaseDate: { gte: prevMonth.startUtc, lte: prevMonth.endUtc },
+          ...(isRestrictedRecruiter ? { application: { job: { ownerId: userId } } } : {}),
+        },
+      }),
+      // Offers Accepted
+      prisma.offer.count({
+        where: {
+          organizationId,
+          status: { in: [OfferStatus.ACCEPTED, OfferStatus.JOINED] },
+          acceptedAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+          ...(isRestrictedRecruiter ? { application: { job: { ownerId: userId } } } : {}),
+        },
+      }),
+      prisma.offer.count({
+        where: {
+          organizationId,
+          status: { in: [OfferStatus.ACCEPTED, OfferStatus.JOINED] },
+          acceptedAt: { gte: prevMonth.startUtc, lte: prevMonth.endUtc },
+          ...(isRestrictedRecruiter ? { application: { job: { ownerId: userId } } } : {}),
+        },
+      }),
+    ]);
+
+    // 1. Time to Hire
+    const timeToHireDays = calculateTimeToHire(
+      joinedCurrent.map(a => ({ createdAt: a.createdAt, joinedAt: a.updatedAt }))
+    );
+    const prevTimeToHireDays = calculateTimeToHire(
+      joinedPrev.map(a => ({ createdAt: a.createdAt, joinedAt: a.updatedAt }))
+    );
+    const timeToHireDelta = calculateMonthOverMonthDelta(timeToHireDays, prevTimeToHireDays, 'vs last month');
+
+    // 2. Submission to Interview Conversion
+    const subToInterviewRate = calculateConversionRate(interviewedCurrent, submissionsCurrent);
+    const prevSubToInterviewRate = calculateConversionRate(interviewedPrev, submissionsPrev);
+    const subToInterviewDelta = calculateMonthOverMonthDelta(subToInterviewRate, prevSubToInterviewRate, 'vs last month');
+
+    // 3. Interview to Offer Conversion
+    const interviewToOfferRate = calculateConversionRate(offersCurrent, interviewedCurrent);
+    const prevInterviewToOfferRate = calculateConversionRate(offersPrev, interviewedPrev);
+    const interviewToOfferDelta = calculateMonthOverMonthDelta(interviewToOfferRate, prevInterviewToOfferRate, 'vs last month');
+
+    // 4. Offer Acceptance Rate
+    const offerAcceptanceRate = calculateConversionRate(offersAcceptedCurrent, offersCurrent);
+    const prevOfferAcceptanceRate = calculateConversionRate(offersAcceptedPrev, offersPrev);
+    const offerAcceptanceDelta = calculateMonthOverMonthDelta(offerAcceptanceRate, prevOfferAcceptanceRate, 'vs last month');
+
+    return {
+      asOfTimestamp: formatAsOfTimestamp(now),
+      timeToHireDays,
+      timeToHireDelta,
+      submissionToInterviewRate: subToInterviewRate,
+      submissionToInterviewDelta: subToInterviewDelta,
+      interviewToOfferRate,
+      interviewToOfferDelta,
+      offerAcceptanceRate,
+      offerAcceptanceDelta,
+    };
+  }
+
+  /**
+   * Recruiter Leaderboard & MIS Analytics
+   */
+  static async getRecruiterLeaderboard(organizationId: string): Promise<RecruiterLeaderboardRow[]> {
+    const recruiters = await prisma.user.findMany({
+      where: {
+        organizationId,
+        role: { in: [UserRole.RECRUITER, UserRole.MANAGER] },
+        isArchived: false,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const now = new Date();
+    const currentMonth = getISTMonthBoundaries(now);
+
+    const rows: RecruiterLeaderboardRow[] = await Promise.all(
+      recruiters.slice(0, 10).map(async (r) => {
+        const [
+          candidatesSourced,
+          submissionsSent,
+          interviewsCompleted,
+          offersReleased,
+          offersAccepted,
+          confirmedPlacements,
+        ] = await Promise.all([
+          prisma.candidate.count({
+            where: { createdById: r.id, createdAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc } },
+          }),
+          prisma.submission.count({
+            where: { createdById: r.id, createdAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc } },
+          }),
+          prisma.interview.count({
+            where: {
+              outcome: InterviewOutcome.COMPLETED,
+              OR: [{ createdById: r.id }, { panelMembers: { some: { userId: r.id } } }],
+              updatedAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+            },
+          }),
+          prisma.offer.count({
+            where: {
+              application: { job: { ownerId: r.id } },
+              releaseDate: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+            },
+          }),
+          prisma.offer.count({
+            where: {
+              application: { job: { ownerId: r.id } },
+              status: { in: [OfferStatus.ACCEPTED, OfferStatus.JOINED] },
+              acceptedAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+            },
+          }),
+          prisma.placement.count({
+            where: {
+              application: { job: { ownerId: r.id } },
+              createdAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+            },
+          }),
+        ]);
+
+        const conversionRate = calculateConversionRate(confirmedPlacements, submissionsSent);
+        const targetAttainment = Math.min(100, Math.round((confirmedPlacements / 2) * 100));
+
+        return {
+          recruiterId: r.id,
+          recruiterName: r.name,
+          email: r.email,
+          candidatesSourced,
+          submissionsSent,
+          interviewsCompleted,
+          offersReleased,
+          offersAccepted,
+          confirmedPlacements,
+          conversionRatePercentage: conversionRate,
+          targetAttainmentPercentage: targetAttainment,
+        };
+      })
+    );
+
+    return rows.sort((a, b) => b.confirmedPlacements - a.confirmedPlacements || b.submissionsSent - a.submissionsSent);
+  }
+
+  /**
+   * Manager MIS Data aggregation
+   */
+  static async getManagerMisData(
+    managerId: string,
+    role: UserRole,
+    organizationId: string
+  ): Promise<ManagerMisData> {
+    const leaderboard = await this.getRecruiterLeaderboard(organizationId);
+    const currentMonth = getISTMonthBoundaries(new Date());
+
+    const totalPlacements = leaderboard.reduce((sum, r) => sum + r.confirmedPlacements, 0);
+    const totalSourced = leaderboard.reduce((sum, r) => sum + r.candidatesSourced, 0);
+    const totalSubmissions = leaderboard.reduce((sum, r) => sum + r.submissionsSent, 0);
+    const totalInterviews = leaderboard.reduce((sum, r) => sum + r.interviewsCompleted, 0);
+    const totalOffers = leaderboard.reduce((sum, r) => sum + r.offersReleased, 0);
+
+    const placements = await prisma.placement.findMany({
+      where: {
+        organizationId,
+        createdAt: { gte: currentMonth.startUtc, lte: currentMonth.endUtc },
+      },
+      select: { feeAmount: true },
+    });
+    const teamFeeTotal = placements.reduce((sum, p) => sum + Number(p.feeAmount), 0);
+
+    return {
+      asOfTimestamp: formatAsOfTimestamp(new Date()),
+      periodLabel: currentMonth.label,
+      teamSourcedTotal: totalSourced,
+      teamSubmissionsTotal: totalSubmissions,
+      teamInterviewsTotal: totalInterviews,
+      teamOffersTotal: totalOffers,
+      teamPlacementsTotal: totalPlacements,
+      teamFeeTotal,
+      recruiters: leaderboard,
     };
   }
 }

@@ -18,6 +18,17 @@ export function TopBar({ onToggleMobileMenu, showWorkspaceChip = true }: TopBarP
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <>
       <header className="h-16 bg-white border-b border-[#E6E8F0] px-4 sm:px-6 flex items-center justify-between gap-3 sticky top-0 z-30">

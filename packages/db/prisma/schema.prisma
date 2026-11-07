@@ -65,8 +65,11 @@ enum SubmissionApprovalStatus {
 enum OfferStatus {
   DRAFT
   SENT
+  RELEASED
   ACCEPTED
   DECLINED
+  EXPIRED
+  JOINED
   WITHDRAWN
 }
 
@@ -146,6 +149,8 @@ model Organization {
   sourcingIntegrations   SourcingIntegration[]
   reportDefinitions      ReportDefinition[]
   clientReportSchedules  ClientReportSchedule[]
+  offers                 Offer[]
+  placements             Placement[]
 
   @@index([status])
 }
@@ -1200,42 +1205,61 @@ model SubmissionProfileVersion {
 }
 
 model Offer {
-  id                String      @id @default(uuid())
+  id                String        @id @default(uuid())
   applicationId     String
-  application       Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application       Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   clientId          String
-  client            Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  offeredSalary     Decimal     @db.Decimal(12, 2)
+  client            Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  organizationId    String        @default("org-aureva-1")
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  offeredSalary     Decimal       @db.Decimal(12, 2)
   joiningDate       DateTime?
-  status            OfferStatus @default(DRAFT)
+  releaseDate       DateTime?     @default(now())
+  expiryDate        DateTime?
+  acceptedAt        DateTime?
+  declinedAt        DateTime?
+  declineReason     String?
+  joinedAt          DateTime?
+  notes             String?
+  status            OfferStatus   @default(DRAFT)
   offerDocumentUrl  String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  placementId       String?       @unique
+  placement         Placement?    @relation(fields: [placementId], references: [id], onDelete: SetNull)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
   createdById       String?
 
   @@index([applicationId])
   @@index([clientId])
+  @@index([organizationId])
   @@index([status])
+  @@index([releaseDate])
+  @@index([joiningDate])
 }
 
 model Placement {
-  id            String        @id @default(uuid())
-  applicationId String        @unique
-  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  clientId      String
-  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  feeBasis      String        @default("PERCENTAGE")
-  feeAmount     Decimal       @db.Decimal(12, 2)
-  paymentTerms  String        @default("NET_30")
-  dueDate       DateTime?
-  paymentStatus PaymentStatus @default(PENDING)
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  createdById   String?
+  id             String        @id @default(uuid())
+  applicationId  String        @unique
+  application    Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  organizationId String        @default("org-aureva-1")
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  feeBasis       String        @default("PERCENTAGE")
+  feeAmount      Decimal       @db.Decimal(12, 2)
+  paymentTerms   String        @default("NET_30")
+  dueDate        DateTime?
+  paymentStatus  PaymentStatus @default(PENDING)
+  paidAt         DateTime?
+  joiningDate    DateTime?
+  offer          Offer?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  createdById    String?
 
   @@index([applicationId])
   @@index([clientId])
+  @@index([organizationId])
   @@index([paymentStatus])
 }
 

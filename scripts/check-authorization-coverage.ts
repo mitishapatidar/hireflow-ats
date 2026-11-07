@@ -325,6 +325,25 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'POST', url: '/api/reports/client-schedules/:id/pause', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
   { method: 'GET', url: '/api/reports/client-schedules/:id/history', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
   { method: 'POST', url: '/api/reports/client-schedules/:id/retry', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+
+  // Prompt 21: Recruitment Analytics & BI
+  { method: 'GET', url: '/api/reports/analytics/overview', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/reports/analytics/funnel', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/reports/analytics/leaderboard', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/reports/analytics/mis', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+
+  // Prompt 21: Offers & Placements
+  { method: 'GET', url: '/api/offers/stats', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/offers', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT] },
+  { method: 'GET', url: '/api/offers/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT] },
+  { method: 'POST', url: '/api/offers', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/offers/:id/release', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/offers/:id/accept', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/offers/:id/decline', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/offers/:id/confirm-joining', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+
+  // Prompt 21: Global Search
+  { method: 'GET', url: '/api/search', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
 ];
 
 async function runAuthorizationAudit() {

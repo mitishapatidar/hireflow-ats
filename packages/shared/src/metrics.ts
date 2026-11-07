@@ -268,3 +268,105 @@ export interface RecruiterDailyActivitySummary {
   interviewsCompleted: TargetProgress;
   overallScorePercentage: number;
 }
+
+
+// ==========================================
+// PROMPT 21: RECRUITMENT BI & ANALYTICS METRICS
+// ==========================================
+
+export interface RecruitmentOverviewKPIs {
+  asOfTimestamp: string;
+  timeToHireDays: number;
+  timeToHireDelta: MetricDelta;
+  submissionToInterviewRate: number;
+  submissionToInterviewDelta: MetricDelta;
+  interviewToOfferRate: number;
+  interviewToOfferDelta: MetricDelta;
+  offerAcceptanceRate: number;
+  offerAcceptanceDelta: MetricDelta;
+}
+
+export interface RecruiterLeaderboardRow {
+  recruiterId: string;
+  recruiterName: string;
+  email: string;
+  avatarUrl?: string | null;
+  candidatesSourced: number;
+  submissionsSent: number;
+  interviewsCompleted: number;
+  offersReleased: number;
+  offersAccepted: number;
+  confirmedPlacements: number;
+  conversionRatePercentage: number;
+  targetAttainmentPercentage: number;
+}
+
+export interface ManagerMisData {
+  asOfTimestamp: string;
+  periodLabel: string;
+  teamSourcedTotal: number;
+  teamSubmissionsTotal: number;
+  teamInterviewsTotal: number;
+  teamOffersTotal: number;
+  teamPlacementsTotal: number;
+  teamFeeTotal: number;
+  recruiters: RecruiterLeaderboardRow[];
+}
+
+export interface OffersDashboardStats {
+  releasedMtd: number;
+  releasedDelta: MetricDelta;
+  acceptedMtd: number;
+  acceptedRate: number;
+  pendingOffers: number;
+  confirmedPlacementsMtd: number;
+  totalPlacementFeeMtd: number;
+  asOfTimestamp: string;
+}
+
+/**
+ * Calculates average Time to Hire (in days).
+ * Returns 0 if no joined candidates.
+ */
+export function calculateTimeToHire(records: { createdAt: Date | string; joinedAt?: Date | string | null }[]): number {
+  if (!records || records.length === 0) return 0;
+
+  const valid = records.filter(r => r.joinedAt && r.createdAt);
+  if (valid.length === 0) return 0;
+
+  const totalDays = valid.reduce((sum, r) => {
+    const start = new Date(r.createdAt).getTime();
+    const end = new Date(r.joinedAt!).getTime();
+    const diffDays = Math.max(0, (end - start) / (1000 * 60 * 60 * 24));
+    return sum + diffDays;
+  }, 0);
+
+  return Math.round((totalDays / valid.length) * 10) / 10;
+}
+
+/**
+ * Safe conversion percentage (0-100%).
+ * Returns 0 if denominator is 0.
+ */
+export function calculateConversionRate(numerator: number, denominator: number): number {
+  if (!denominator || denominator <= 0) return 0;
+  const rate = (Math.max(0, numerator) / denominator) * 100;
+  return Math.min(100, Math.round(rate * 10) / 10);
+}
+
+/**
+ * Calculates Offer Acceptance Rate.
+ * Formula: (Accepted + Joined) / (Released - Withdrawn) * 100
+ */
+export function calculateOfferAcceptanceRate(
+  accepted: number,
+  joined: number,
+  released: number,
+  withdrawn: number = 0
+): number {
+  const eligibleReleased = Math.max(0, released - withdrawn);
+  if (eligibleReleased <= 0) return 0;
+  const positiveResponses = accepted + joined;
+  const rate = (positiveResponses / eligibleReleased) * 100;
+  return Math.min(100, Math.round(rate * 10) / 10);
+}

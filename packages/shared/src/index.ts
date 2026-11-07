@@ -132,6 +132,9 @@ export * from './candidate-portal';
 // Custom Report Builder & Scheduled Client Reports (Prompt 26)
 export * from './reports';
 
+// Offers, Global Search & Analytics (Prompt 21)
+export * from './offers';
+
 
 
 
