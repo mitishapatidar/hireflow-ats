@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { prisma } from '@hireflow/db';
+import { prisma, Prisma } from '@hireflow/db';
 import {
   UserRole,
   PaymentStatus,
@@ -101,7 +101,8 @@ export const placementRoutes: FastifyPluginAsync = async (server: FastifyInstanc
       ],
     },
     async (request: any, reply) => {
-      const { organizationId } = request.user;
+      const { organizationId, role } = request.user;
+      const isLeadership = role === UserRole.ADMIN || role === UserRole.MANAGER;
 
       const upcomingOffers = await prisma.offer.findMany({
         where: {
@@ -125,12 +126,13 @@ export const placementRoutes: FastifyPluginAsync = async (server: FastifyInstanc
         id: o.id,
         applicationId: o.applicationId,
         candidateName: o.application?.candidate?.name || 'Candidate',
-        candidateEmail: o.application?.candidate?.email,
+        candidateEmail: isLeadership ? o.application?.candidate?.email : undefined,
         jobTitle: o.application?.job?.title || 'Job',
         jobCode: o.application?.job?.code,
         clientName: o.client?.legalName || 'Client',
         clientId: o.clientId,
-        offeredSalary: Number(o.offeredSalary),
+        offeredSalary: isLeadership ? Number(o.offeredSalary) : undefined,
+        clientFeePercentage: isLeadership && o.client?.feePercentage ? Number(o.client.feePercentage) : undefined,
         joiningDate: o.joiningDate,
         acceptedAt: o.acceptedAt,
         status: o.status,
@@ -269,6 +271,34 @@ export const placementRoutes: FastifyPluginAsync = async (server: FastifyInstanc
         if (!clientAccess) {
           return reply.status(403).send({ success: false, error: 'Unauthorized access to placement' });
         }
+        if (
+          Array.isArray(clientAccess.authorizedJobIds) &&
+          (clientAccess.authorizedJobIds as string[]).length > 0 &&
+          !(clientAccess.authorizedJobIds as string[]).includes(placement.application.jobId)
+        ) {
+          return reply.status(403).send({
+            success: false,
+            error: 'Unauthorized: Client lacks access to the job for this placement',
+          });
+        }
+      } else if (role === UserRole.CANDIDATE) {
+        // Enforce candidate ownership: candidate can only view their own placement
+        const candidate = await prisma.candidate.findFirst({
+          where: {
+            organizationId,
+            isArchived: false,
+            OR: [
+              { userId: request.user.id },
+              ...(request.user.email ? [{ email: request.user.email }] : []),
+            ],
+          },
+        });
+        if (!candidate || placement.application.candidateId !== candidate.id) {
+          return reply.status(403).send({
+            success: false,
+            error: 'Unauthorized: Candidates can only access their own placement record',
+          });
+        }
       }
 
       const serialized = serializePlacementForRole(placement, role);
@@ -298,7 +328,7 @@ export const placementRoutes: FastifyPluginAsync = async (server: FastifyInstanc
         return reply.status(400).send({ success: false, error: parseResult.error.flatten() });
       }
 
-      const { paymentStatus, invoiceNumber, notes } = parseResult.data;
+      const { paymentStatus, invoiceNumber, notes, waiverReason } = parseResult.data as any;
 
       const placement = await prisma.placement.findUnique({
         where: { id },
@@ -306,6 +336,34 @@ export const placementRoutes: FastifyPluginAsync = async (server: FastifyInstanc
 
       if (!placement || placement.organizationId !== organizationId) {
         return reply.status(404).send({ success: false, error: 'Placement record not found' });
+      }
+
+      const currentReceived = new Prisma.Decimal(placement.amountReceived || 0);
+      const totalFee = new Prisma.Decimal(placement.feeAmount);
+
+      // Ledger consistency check: prevent arbitrary status changes contradicting the ledger
+      if (paymentStatus === PaymentStatus.PAID) {
+        if (currentReceived.lessThan(totalFee)) {
+          return reply.status(400).send({
+            success: false,
+            error: `Cannot mark placement as PAID when outstanding balance of ₹${totalFee.minus(currentReceived).toString()} remains. Record payments or waive balance.`,
+          });
+        }
+      } else if (paymentStatus === PaymentStatus.PENDING) {
+        if (currentReceived.greaterThan(0)) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Cannot reset placement to PENDING when installment payments have already been received.',
+          });
+        }
+      } else if (paymentStatus === PaymentStatus.WAIVED) {
+        const reason = waiverReason || notes;
+        if (!reason || reason.trim().length === 0) {
+          return reply.status(400).send({
+            success: false,
+            error: 'A mandatory justification reason is required to waive a placement balance.',
+          });
+        }
       }
 
       const previousStatus = placement.paymentStatus;
@@ -334,8 +392,16 @@ export const placementRoutes: FastifyPluginAsync = async (server: FastifyInstanc
             actorId: userId,
             actorRole: role,
             previousState: { paymentStatus: String(previousStatus) },
-            newState: { paymentStatus: String(paymentStatus), invoiceNumber: invoiceNumber || null },
-            notes: (notes as string) || `Payment status updated from ${previousStatus} to ${paymentStatus}`,
+            newState: {
+              paymentStatus: String(paymentStatus),
+              invoiceNumber: invoiceNumber || null,
+              waiverReason: waiverReason || null,
+            },
+            notes:
+              (notes as string) ||
+              (waiverReason
+                ? `Placement balance waived: ${waiverReason}`
+                : `Payment status updated from ${previousStatus} to ${paymentStatus}`),
           },
         });
 
@@ -369,75 +435,108 @@ export const placementRoutes: FastifyPluginAsync = async (server: FastifyInstanc
 
       const input = parseResult.data;
 
-      const placement = await prisma.placement.findUnique({
-        where: { id },
-      });
+      try {
+        const [paymentRecord, updatedPlacement] = await prisma.$transaction(async (tx) => {
+          const p = await tx.placement.findUnique({
+            where: { id },
+          });
 
-      if (!placement || placement.organizationId !== organizationId) {
-        return reply.status(404).send({ success: false, error: 'Placement record not found' });
-      }
+          if (!p || p.organizationId !== organizationId) {
+            throw new Error('PLACEMENT_NOT_FOUND');
+          }
 
-      const currentReceived = Number(placement.amountReceived || 0);
-      const newReceived = currentReceived + input.amount;
-      const totalFee = Number(placement.feeAmount);
+          const totalFee = new Prisma.Decimal(p.feeAmount);
+          const paymentAmount = new Prisma.Decimal(input.amount);
 
-      const isFullyPaid = newReceived >= totalFee;
-      const newPaymentStatus = isFullyPaid ? PaymentStatus.PAID : PaymentStatus.PARTIALLY_PAID;
+          // Recompute current amount received strictly by summing ledger entries
+          const aggregate = await tx.placementPayment.aggregate({
+            where: { placementId: id },
+            _sum: { amount: true },
+          });
+          const currentReceived = new Prisma.Decimal(aggregate._sum.amount || 0);
+          const newReceived = currentReceived.add(paymentAmount);
 
-      const [paymentRecord, updatedPlacement] = await prisma.$transaction(async (tx) => {
-        const payment = await tx.placementPayment.create({
-          data: {
-            placementId: id,
-            amount: input.amount,
-            paymentDate: input.paymentDate ? new Date(input.paymentDate) : new Date(),
-            paymentMethod: input.paymentMethod,
-            referenceNumber: input.referenceNumber || null,
-            notes: input.notes || null,
-            createdById: userId,
-          },
-        });
+          // Reject overpayment beyond total commercial fee
+          if (newReceived.greaterThan(totalFee)) {
+            const remainingBalance = totalFee.minus(currentReceived);
+            throw new Error(`OVERPAYMENT: Payment amount ₹${input.amount} exceeds outstanding balance of ₹${remainingBalance.toString()}`);
+          }
 
-        const p = await tx.placement.update({
-          where: { id },
-          data: {
-            amountReceived: newReceived,
-            paymentStatus: newPaymentStatus,
-            paidAt: isFullyPaid ? new Date() : placement.paidAt,
-          },
-          include: {
-            client: true,
-            application: { include: { candidate: true, job: true } },
-            joiningConfirmation: true,
-            payments: true,
-          },
-        });
+          const isFullyPaid = newReceived.greaterThanOrEqualTo(totalFee);
+          const newPaymentStatus = isFullyPaid ? PaymentStatus.PAID : PaymentStatus.PARTIALLY_PAID;
 
-        await tx.placementHistory.create({
-          data: {
-            placementId: id,
-            eventType: 'PAYMENT_RECORDED',
-            actorId: userId,
-            actorRole: role,
-            newState: {
-              paymentId: payment.id,
-              amount: input.amount,
-              totalReceived: newReceived,
-              paymentStatus: newPaymentStatus,
+          const payment = await tx.placementPayment.create({
+            data: {
+              placementId: id,
+              amount: paymentAmount,
+              paymentDate: input.paymentDate ? new Date(input.paymentDate) : new Date(),
+              paymentMethod: input.paymentMethod,
+              referenceNumber: input.referenceNumber,
+              notes: input.notes || null,
+              createdById: userId,
             },
-            notes: `Payment of ₹${input.amount.toLocaleString('en-IN')} recorded via ${input.paymentMethod}.`,
-          },
+          });
+
+          const updatedP = await tx.placement.update({
+            where: { id },
+            data: {
+              amountReceived: newReceived,
+              paymentStatus: newPaymentStatus,
+              paidAt: isFullyPaid ? (p.paidAt || new Date()) : p.paidAt,
+            },
+            include: {
+              client: true,
+              application: { include: { candidate: true, job: true } },
+              joiningConfirmation: true,
+              payments: true,
+            },
+          });
+
+          await tx.placementHistory.create({
+            data: {
+              placementId: id,
+              eventType: 'PAYMENT_RECORDED',
+              actorId: userId,
+              actorRole: role,
+              previousState: {
+                amountReceived: currentReceived.toString(),
+                paymentStatus: p.paymentStatus,
+              },
+              newState: {
+                paymentId: payment.id,
+                amount: paymentAmount.toString(),
+                totalReceived: newReceived.toString(),
+                paymentStatus: newPaymentStatus,
+              },
+              notes: `Payment of ₹${input.amount.toLocaleString('en-IN')} recorded via ${input.paymentMethod} (Ref: ${input.referenceNumber}).`,
+            },
+          });
+
+          return [payment, updatedP];
         });
 
-        return [payment, p];
-      });
-
-      return reply.status(201).send({
-        success: true,
-        data: {
-          payment: paymentRecord,
-          placement: serializePlacementForRole(updatedPlacement, role),
-        },
-      });
+        return reply.status(201).send({
+          success: true,
+          data: {
+            payment: paymentRecord,
+            placement: serializePlacementForRole(updatedPlacement, role),
+          },
+        });
+      } catch (err: any) {
+        if (err.message === 'PLACEMENT_NOT_FOUND') {
+          return reply.status(404).send({ success: false, error: 'Placement record not found' });
+        }
+        if (err.message && err.message.startsWith('OVERPAYMENT:')) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'OVERPAYMENT_NOT_PERMITTED',
+              message: err.message.replace('OVERPAYMENT: ', ''),
+            },
+          });
+        }
+        throw err;
+      }
     }
   );
 

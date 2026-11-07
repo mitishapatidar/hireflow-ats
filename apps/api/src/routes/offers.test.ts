@@ -141,19 +141,24 @@ describe('Prompt 21: Offers, Placements & Recruitment Analytics Integration Test
     expect(body.data.acceptedAt).toBeDefined();
   });
 
-  it('5. POST /api/offers/:id/confirm-joining creates Placement in transaction and updates status to JOINED', async () => {
+  it('5. POST /api/offers/:id/confirm-joining calculates fee strictly on server, ignoring client feeAmount', async () => {
     // Clean up any pre-existing placement for this application first
     await prisma.placement.deleteMany({ where: { applicationId: testApplicationId } });
 
+    // Client sends a forged low feeAmount (99 INR) to attempt fee tampering
     const res = await app.inject({
       method: 'POST',
       url: `/api/offers/${createdOfferId}/confirm-joining`,
       headers: { cookie: adminCookie },
       payload: {
         feeBasis: 'PERCENTAGE',
-        feeAmount: 212500, // 8.5% of ₹25L
+        feeAmount: 99, // Forged client feeAmount must be strictly ignored
         paymentTerms: 'NET_30',
         joinedAt: new Date().toISOString(),
+        joiningEvidence: {
+          source: 'CLIENT_EMAIL',
+          confirmedBy: 'HR Director',
+        },
       },
     });
 
@@ -162,6 +167,7 @@ describe('Prompt 21: Offers, Placements & Recruitment Analytics Integration Test
     expect(body.success).toBe(true);
     expect(body.data.offer.status).toBe(OfferStatus.JOINED);
     expect(body.data.placement.paymentStatus).toBe(PaymentStatus.PENDING);
+    // Server calculated 8.5% of ₹25,00,000 CTC = 2,12,500 (tampered 99 ignored)
     expect(Number(body.data.placement.feeAmount)).toBe(212500);
 
     createdPlacementId = body.data.placement.id;
@@ -171,15 +177,88 @@ describe('Prompt 21: Offers, Placements & Recruitment Analytics Integration Test
     expect(appRecord.status).toBe('PLACED');
   });
 
+  it('5b. POST /api/offers/:id/confirm-joining rejects joining if client has no agreed fee agreement', async () => {
+    // Create a temporary client with no fee percentage
+    const tempClient = await prisma.client.create({
+      data: {
+        code: `NOFEE-${Date.now().toString().slice(-4)}`,
+        legalName: 'Zero Agreement Corp',
+        organizationId: 'org-aureva-1',
+        feePercentage: null,
+      },
+    });
+
+    const tempJob = await prisma.job.create({
+      data: {
+        title: 'Tester',
+        code: `J-NOFEE-${Date.now().toString().slice(-4)}`,
+        organizationId: 'org-aureva-1',
+        clientId: tempClient.id,
+      },
+    });
+
+    const tempCandidate = await prisma.candidate.create({
+      data: {
+        code: `C-NOFEE-${Date.now().toString().slice(-4)}`,
+        name: 'No Agreement Candidate',
+        email: `noagree-${Date.now()}@example.com`,
+        organizationId: 'org-aureva-1',
+      },
+    });
+
+    const tempApp = await prisma.application.create({
+      data: {
+        jobId: tempJob.id,
+        candidateId: tempCandidate.id,
+        status: 'OFFER',
+      },
+    });
+
+    const tempOffer = await prisma.offer.create({
+      data: {
+        applicationId: tempApp.id,
+        clientId: tempClient.id,
+        organizationId: 'org-aureva-1',
+        offeredSalary: 1000000,
+        status: OfferStatus.ACCEPTED,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/offers/${tempOffer.id}/confirm-joining`,
+      headers: { cookie: adminCookie },
+      payload: {
+        joiningEvidence: {
+          source: 'HR_CONFIRMATION',
+          confirmedBy: 'HR Lead',
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.payload);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('CLIENT_FEE_AGREEMENT_MISSING');
+
+    // Cleanup temp records
+    await prisma.offer.delete({ where: { id: tempOffer.id } });
+    await prisma.application.delete({ where: { id: tempApp.id } });
+    await prisma.candidate.delete({ where: { id: tempCandidate.id } });
+    await prisma.job.delete({ where: { id: tempJob.id } });
+    await prisma.client.delete({ where: { id: tempClient.id } });
+  });
+
   it('6. POST /api/offers/:id/confirm-joining blocks duplicate placement creation', async () => {
     const res = await app.inject({
       method: 'POST',
       url: `/api/offers/${createdOfferId}/confirm-joining`,
       headers: { cookie: adminCookie },
       payload: {
-        feeBasis: 'PERCENTAGE',
-        feeAmount: 212500,
-        paymentTerms: 'NET_30',
+        joiningEvidence: {
+          source: 'CLIENT_EMAIL',
+          confirmedBy: 'HR Director',
+        },
       },
     });
 

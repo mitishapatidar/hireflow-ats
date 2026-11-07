@@ -28,11 +28,30 @@ A handover request transitions through explicit states:
 
 ---
 
-## 3. Atomic Execution & Transactional Safety
-When a handover request is approved, all entity updates execute inside an atomic database transaction (`prisma.$transaction`):
-1. **Source & Target Validation**: Verifies both users belong to the tenant organization and target recruiter is active with required `ClientAccess`.
-2. **Candidate Update**: Updates `Candidate.ownerId` for all selected candidate IDs.
-3. **Job Reassignment**: Updates `Job.ownerId` and inserts active `JobAssignment` rows for the new owner.
-4. **Task Reassignment**: Updates `Task.assignedToId` for open tasks.
-5. **Ownership History Recording**: Inserts an immutable `OwnershipHistory` record for every individual reassigned resource.
-6. **Audit & Notifications**: Logs the operation in `AuditLog` and triggers notifications to source recruiter, destination recruiter, and managing directors.
+## 3. Concurrency Protection & Transactional Safety
+When a handover request is approved, execution is guarded by strict concurrency controls and an atomic database transaction (`prisma.$transaction`):
+
+1. **Optimistic Concurrency Lock**:
+   - The transaction attempts to lock the request in a single atomic step:
+     ```typescript
+     const lockResult = await tx.handoverRequest.updateMany({
+       where: { id: reqId, organizationId: user.organizationId, status: HandoverStatus.PENDING },
+       data: { status: HandoverStatus.APPROVED }
+     });
+     if (lockResult.count === 0) {
+       throw new Error("Handover request is no longer pending or already processed");
+     }
+     ```
+   - This prevents race conditions or double-execution if concurrent approval requests arrive.
+
+2. **In-Transaction Entity Re-Validation**:
+   - Re-verifies that the target recruiter remains active and belongs to the organization.
+   - Re-queries candidates to ensure they are still owned by `fromUserId`. Any candidate transferred elsewhere in the interim is skipped.
+   - Re-queries jobs to ensure `fromUserId` is indeed assigned or owns the job.
+   - Excludes tasks with `status === TaskStatus.COMPLETED`.
+
+3. **Verified-Only Ownership History**:
+   - `OwnershipHistory` audit rows are generated **only for resources that were actually verified and reassigned**. The count of created history rows strictly matches the number of modified resources.
+
+4. **Audit & Notifications**:
+   - Logs the operation in `AuditLog` and triggers notifications to source recruiter, destination recruiter, and managing directors.

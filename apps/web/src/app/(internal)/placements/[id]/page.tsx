@@ -78,6 +78,11 @@ export default function PlacementDetailPage() {
       return;
     }
 
+    if (!paymentForm.referenceNumber.trim()) {
+      setPaymentError('Transaction reference / UTR number is required.');
+      return;
+    }
+
     setPaymentError(null);
     startTransition(async () => {
       try {
@@ -85,7 +90,7 @@ export default function PlacementDetailPage() {
           amount: amountNum,
           paymentDate: paymentForm.paymentDate,
           paymentMethod: paymentForm.paymentMethod as any,
-          referenceNumber: paymentForm.referenceNumber.trim() || undefined,
+          referenceNumber: paymentForm.referenceNumber.trim(),
           notes: paymentForm.notes.trim() || undefined,
         });
 

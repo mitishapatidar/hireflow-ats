@@ -242,26 +242,40 @@ export async function recordPlacementPaymentAction(id: string, input: RecordPlac
     throw new Error(`Validation failed: ${parsed.error.errors.map((e) => e.message).join(', ')}`);
   }
 
-  const placement = await prisma.placement.findUnique({ where: { id } });
-  if (!placement || placement.organizationId !== user.organizationId) {
-    throw new Error('Placement record not found');
-  }
-
-  const currentReceived = Number(placement.amountReceived || 0);
-  const newReceived = currentReceived + parsed.data.amount;
-  const totalFee = Number(placement.feeAmount);
-
-  const isFullyPaid = newReceived >= totalFee;
-  const newPaymentStatus = isFullyPaid ? PaymentStatus.PAID : PaymentStatus.PARTIALLY_PAID;
-
   await prisma.$transaction(async (tx) => {
+    const placement = await tx.placement.findUnique({ where: { id } });
+    if (!placement || placement.organizationId !== user.organizationId) {
+      throw new Error('Placement record not found');
+    }
+
+    const totalFee = new Prisma.Decimal(placement.feeAmount);
+    const paymentAmount = new Prisma.Decimal(parsed.data.amount);
+
+    // Sum all existing ledger entries to prevent balance corruption from race conditions
+    const aggregate = await tx.placementPayment.aggregate({
+      where: { placementId: id },
+      _sum: { amount: true },
+    });
+    const currentReceived = new Prisma.Decimal(aggregate._sum.amount || 0);
+    const newReceived = currentReceived.add(paymentAmount);
+
+    if (newReceived.greaterThan(totalFee)) {
+      const remainingBalance = totalFee.minus(currentReceived);
+      throw new Error(
+        `Overpayment not permitted: Payment amount ₹${parsed.data.amount} exceeds outstanding balance of ₹${remainingBalance.toString()}`
+      );
+    }
+
+    const isFullyPaid = newReceived.greaterThanOrEqualTo(totalFee);
+    const newPaymentStatus = isFullyPaid ? PaymentStatus.PAID : PaymentStatus.PARTIALLY_PAID;
+
     const payment = await tx.placementPayment.create({
       data: {
         placementId: id,
-        amount: new Prisma.Decimal(parsed.data.amount),
+        amount: paymentAmount,
         paymentDate: parsed.data.paymentDate ? new Date(parsed.data.paymentDate) : new Date(),
         paymentMethod: parsed.data.paymentMethod,
-        referenceNumber: parsed.data.referenceNumber || null,
+        referenceNumber: parsed.data.referenceNumber,
         notes: parsed.data.notes || null,
         createdById: user.id,
       },
@@ -270,9 +284,9 @@ export async function recordPlacementPaymentAction(id: string, input: RecordPlac
     await tx.placement.update({
       where: { id },
       data: {
-        amountReceived: new Prisma.Decimal(newReceived),
+        amountReceived: newReceived,
         paymentStatus: newPaymentStatus,
-        paidAt: isFullyPaid ? new Date() : placement.paidAt,
+        paidAt: isFullyPaid ? (placement.paidAt || new Date()) : placement.paidAt,
       },
     });
 
@@ -285,10 +299,10 @@ export async function recordPlacementPaymentAction(id: string, input: RecordPlac
         newState: {
           paymentId: payment.id,
           amount: parsed.data.amount,
-          totalReceived: newReceived,
+          totalReceived: newReceived.toString(),
           paymentStatus: newPaymentStatus,
         },
-        notes: `Recorded installment payment of ₹${parsed.data.amount.toLocaleString('en-IN')}.`,
+        notes: `Recorded installment payment of ₹${parsed.data.amount.toLocaleString('en-IN')} (Ref: ${parsed.data.referenceNumber}).`,
       },
     });
   });
@@ -322,6 +336,25 @@ export async function updatePlacementPaymentStatusAction(id: string, input: Upda
   const previousStatus = placement.paymentStatus;
   const newStatus = parsed.data.paymentStatus;
 
+  const currentReceived = new Prisma.Decimal(placement.amountReceived || 0);
+  const totalFee = new Prisma.Decimal(placement.feeAmount);
+
+  // Prevent arbitrary status changes contradicting the ledger
+  if (newStatus === PaymentStatus.PAID && currentReceived.lessThan(totalFee)) {
+    throw new Error(
+      `Cannot mark placement as PAID when outstanding balance of ₹${totalFee.minus(currentReceived).toString()} remains`
+    );
+  }
+  if (newStatus === PaymentStatus.PENDING && currentReceived.greaterThan(0)) {
+    throw new Error('Cannot reset placement to PENDING when installment payments have already been received');
+  }
+  if (newStatus === PaymentStatus.WAIVED) {
+    const reason = (parsed.data as any).waiverReason || parsed.data.notes;
+    if (!reason || reason.trim().length === 0) {
+      throw new Error('A mandatory justification reason is required to waive a placement balance');
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.placement.update({
       where: { id },
@@ -339,8 +372,16 @@ export async function updatePlacementPaymentStatusAction(id: string, input: Upda
         actorId: user.id,
         actorRole: user.role,
         previousState: { paymentStatus: String(previousStatus) },
-        newState: { paymentStatus: String(newStatus), invoiceNumber: parsed.data.invoiceNumber || null },
-        notes: parsed.data.notes || `Payment status changed from ${previousStatus} to ${newStatus}.`,
+        newState: {
+          paymentStatus: String(newStatus),
+          invoiceNumber: parsed.data.invoiceNumber || null,
+          waiverReason: (parsed.data as any).waiverReason || null,
+        },
+        notes:
+          parsed.data.notes ||
+          ((parsed.data as any).waiverReason
+            ? `Placement balance waived: ${(parsed.data as any).waiverReason}`
+            : `Payment status changed from ${previousStatus} to ${newStatus}.`),
       },
     });
   });

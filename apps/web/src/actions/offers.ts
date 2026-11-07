@@ -426,8 +426,8 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
   const user = await getCurrentUser();
   if (!user) throw new Error('Unauthorized');
 
-  if (user.role !== UserRole.ADMIN && user.role !== UserRole.MANAGER && user.role !== UserRole.RECRUITER) {
-    throw new Error('Forbidden: Insufficient privileges to confirm candidate joining');
+  if (user.role !== UserRole.ADMIN && user.role !== UserRole.MANAGER) {
+    throw new Error('Forbidden: Only managers and admins can confirm candidate joining and authorize placement fees');
   }
 
   const parsed = ConfirmJoiningSchema.safeParse(input);
@@ -444,7 +444,9 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
     },
   });
 
-  if (!existingOffer) throw new Error('Offer not found');
+  if (!existingOffer || existingOffer.organizationId !== user.organizationId) {
+    throw new Error('Offer not found');
+  }
 
   if (existingOffer.status !== 'ACCEPTED') {
     throw new Error(`Cannot confirm joining: Offer must be ACCEPTED, current status is ${existingOffer.status}`);
@@ -463,20 +465,50 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
 
   const joiningDate = (input as any).joinedAt ? new Date((input as any).joinedAt) : new Date();
 
-  // Server-side calculated placement commercial fee
+  // Server-side authoritative commercial fee calculation (Decimal precision)
+  // Client-supplied feeAmount, feeBasis, and dueDates are STRICTLY IGNORED.
   const feeCalc = calculatePlacementFee(
     Number(existingOffer.offeredSalary),
     existingOffer.client?.feePercentage ? Number(existingOffer.client.feePercentage) : null,
-    (input as any).adjustmentAmount ?? 0
+    (input as any).adjustmentAmount ?? 0,
+    (input as any).adjustmentReason
   );
-  const finalFeeAmount = feeCalc.baseFee > 0 ? feeCalc.netFee : ((input as any).feeAmount || feeCalc.netFee);
-  const feeBasis = feeCalc.baseFee > 0 ? feeCalc.feeBasis : ((input as any).feeBasis || 'PERCENTAGE');
-  const paymentTerms = (input as any).paymentTerms || 'NET_30';
-  const dueDate = (input as any).dueDate
-    ? new Date((input as any).dueDate)
-    : calculatePaymentDueDate(joiningDate, paymentTerms);
+
+  if (!feeCalc.isValid) {
+    throw new Error(feeCalc.error || 'Failed to calculate commercial placement fee from client agreement');
+  }
+
+  const finalFeeAmount = feeCalc.netFee;
+  const feeBasis = feeCalc.feeBasis;
+  const paymentTerms = existingOffer.client?.paymentTerms || 'NET_30';
+  const dueDate = calculatePaymentDueDate(joiningDate, paymentTerms);
 
   const result = await prisma.$transaction(async (tx) => {
+    // Concurrency lock: update offer only if still ACCEPTED and placementId is null
+    const updateCount = await tx.offer.updateMany({
+      where: {
+        id: offerId,
+        organizationId: user.organizationId,
+        status: 'ACCEPTED',
+        placementId: null,
+      },
+      data: {
+        status: 'JOINED',
+        joinedAt: joiningDate,
+      },
+    });
+
+    if (updateCount.count === 0) {
+      throw new Error('Offer is no longer accepted or placement has already been created');
+    }
+
+    const existingInsideTx = await tx.placement.findUnique({
+      where: { applicationId: existingOffer.applicationId },
+    });
+    if (existingInsideTx) {
+      throw new Error('Placement already exists for this application');
+    }
+
     // 1. Create Placement
     const placement = await tx.placement.create({
       data: {
@@ -488,7 +520,7 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
         feePercentage: existingOffer.client?.feePercentage ?? null,
         feeAmount: new Prisma.Decimal(finalFeeAmount),
         adjustmentAmount: new Prisma.Decimal(feeCalc.adjustmentAmount),
-        adjustmentReason: (input as any).adjustmentReason || null,
+        adjustmentReason: feeCalc.adjustmentReason,
         paymentTerms,
         dueDate,
         paymentStatus: 'PENDING',
@@ -500,20 +532,28 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
       },
     });
 
-    // 2. Create JoiningConfirmation evidence
+    // 2. Link Placement to Offer
+    await tx.offer.update({
+      where: { id: offerId },
+      data: { placementId: placement.id },
+    });
+
+    // 3. Create JoiningConfirmation evidence
     await tx.joiningConfirmation.create({
       data: {
         placementId: placement.id,
         source: (input as any).joiningEvidence?.source || 'RECRUITER_VERIFIED',
         confirmedBy: (input as any).joiningEvidence?.confirmedBy || user.name || user.email || 'Recruiter',
-        confirmedAt: (input as any).joiningEvidence?.confirmedAt ? new Date((input as any).joiningEvidence.confirmedAt) : new Date(),
+        confirmedAt: (input as any).joiningEvidence?.confirmedAt
+          ? new Date((input as any).joiningEvidence.confirmedAt)
+          : new Date(),
         documentUrl: (input as any).joiningEvidence?.documentUrl || null,
         notes: (input as any).joiningEvidence?.notes || null,
         createdById: user.id,
       },
     });
 
-    // 3. Create initial PlacementHistory
+    // 4. Create initial PlacementHistory
     await tx.placementHistory.create({
       data: {
         placementId: placement.id,
@@ -521,33 +561,28 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
         actorId: user.id,
         actorRole: user.role,
         newState: {
-          feeAmount: finalFeeAmount,
+          grossFee: feeCalc.grossFee,
+          adjustmentAmount: feeCalc.adjustmentAmount,
+          adjustmentReason: feeCalc.adjustmentReason,
+          finalFeeAmount: feeCalc.netFee,
           status: 'PENDING',
           ctc: Number(existingOffer.offeredSalary),
         },
-        notes: 'Candidate joining confirmed and placement created.',
+        notes:
+          feeCalc.adjustmentAmount > 0
+            ? `Candidate joining confirmed. Concession of ₹${feeCalc.adjustmentAmount} authorized: ${feeCalc.adjustmentReason}`
+            : 'Candidate joining confirmed and placement created.',
       },
     });
 
-    // 4. Update Offer
-    const updatedOffer = await tx.offer.update({
-      where: { id: offerId },
-      data: {
-        status: 'JOINED',
-        joinedAt: joiningDate,
-        placementId: placement.id,
-      },
-    });
-
-    // 5. Update Application status to PLACED
+    // 5. Update Application Status to PLACED
     await tx.application.update({
       where: { id: existingOffer.applicationId },
-      data: {
-        status: 'PLACED',
-      },
+      data: { status: 'PLACED' as any },
     });
 
-    return { placement, updatedOffer };
+    const updated = await tx.offer.findUniqueOrThrow({ where: { id: offerId } });
+    return { offer: updated, placement };
   });
 
   await logOfferEvent(user.id, 'OFFER_CONFIRMED_JOINED', offerId, { status: 'ACCEPTED' }, {
@@ -561,7 +596,7 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
   revalidatePath('/reports');
   return {
     success: true,
-    offer: result.updatedOffer,
+    offer: result.offer,
     placement: result.placement,
   };
 }

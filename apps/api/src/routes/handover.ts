@@ -290,156 +290,264 @@ export const handoverRoutes: FastifyPluginAsync = async (server: FastifyInstance
       const jobIds = Array.isArray(handover.jobIds) ? (handover.jobIds as string[]) : [];
       const taskIds = Array.isArray(handover.taskIds) ? (handover.taskIds as string[]) : [];
 
-      // Single atomic transaction
-      const updated = await prisma.$transaction(async (tx) => {
-        // 1. Transfer Candidates
-        if (candidateIds.length > 0) {
-          await tx.candidate.updateMany({
-            where: { id: { in: candidateIds }, organizationId },
-            data: { ownerId: handover.toUserId },
+      try {
+        // Atomic transaction with optimistic concurrency lock
+        const updated = await prisma.$transaction(async (tx) => {
+          // 0. Concurrency Guard: conditionally transition from PENDING to APPROVED
+          const lockResult = await tx.handoverRequest.updateMany({
+            where: {
+              id,
+              organizationId,
+              status: HandoverStatus.PENDING,
+            },
+            data: {
+              status: HandoverStatus.APPROVED,
+              reviewedById: userId,
+              reviewedAt: new Date(),
+            },
           });
 
-          for (const candId of candidateIds) {
-            await tx.ownershipHistory.create({
-              data: {
-                organizationId,
-                entityType: HandoverEntityType.CANDIDATE,
-                entityId: candId,
-                fromUserId: handover.fromUserId,
-                toUserId: handover.toUserId,
-                handoverRequestId: handover.id,
-                transferredById: userId,
-                reason: handover.reason,
-              },
-            });
+          if (lockResult.count === 0) {
+            throw new Error('HANDOVER_ALREADY_REVIEWED_OR_INACTIVE');
           }
-        }
 
-        // 2. Transfer Jobs & Assignments
-        if (jobIds.length > 0) {
-          await tx.job.updateMany({
-            where: { id: { in: jobIds }, organizationId },
-            data: { ownerId: handover.toUserId },
+          // Verify destination recruiter is active inside transaction
+          const targetUser = await tx.user.findFirst({
+            where: { id: handover.toUserId, organizationId, status: 'ACTIVE' },
           });
+          if (!targetUser) {
+            throw new Error('TARGET_RECRUITER_INACTIVE');
+          }
 
-          for (const jobId of jobIds) {
-            // Update previous assignment status to REASSIGNED
-            await tx.jobAssignment.updateMany({
-              where: { jobId, recruiterId: handover.fromUserId, status: 'ACTIVE' },
-              data: { status: 'REASSIGNED' },
+          // 1. Verify and Transfer Candidates
+          if (candidateIds.length > 0) {
+            const verifiedCandidates = await tx.candidate.findMany({
+              where: {
+                id: { in: candidateIds },
+                organizationId,
+                ownerId: handover.fromUserId,
+                isArchived: false,
+              },
+              select: { id: true, name: true },
             });
 
-            // Create or activate assignment for new recruiter
-            const existing = await tx.jobAssignment.findFirst({
-              where: { jobId, recruiterId: handover.toUserId },
+            if (verifiedCandidates.length !== candidateIds.length) {
+              throw new Error(
+                'CANDIDATE_OWNERSHIP_MISMATCH: One or more candidates are not owned by source recruiter or do not exist'
+              );
+            }
+
+            const verifiedCandIds = verifiedCandidates.map((c) => c.id);
+            await tx.candidate.updateMany({
+              where: { id: { in: verifiedCandIds } },
+              data: { ownerId: handover.toUserId },
             });
-            if (existing) {
-              await tx.jobAssignment.update({
-                where: { id: existing.id },
-                data: { status: 'ACTIVE', assignedById: userId },
-              });
-            } else {
-              await tx.jobAssignment.create({
+
+            // Record OwnershipHistory strictly for verified transferred candidates
+            for (const cand of verifiedCandidates) {
+              await tx.ownershipHistory.create({
                 data: {
-                  jobId,
-                  recruiterId: handover.toUserId,
-                  assignedById: userId,
-                  status: 'ACTIVE',
+                  organizationId,
+                  entityType: HandoverEntityType.CANDIDATE,
+                  entityId: cand.id,
+                  fromUserId: handover.fromUserId,
+                  toUserId: handover.toUserId,
+                  handoverRequestId: handover.id,
+                  transferredById: userId,
+                  reason: handover.reason,
                 },
               });
             }
+          }
 
-            await tx.ownershipHistory.create({
-              data: {
+          // 2. Verify and Transfer Jobs & Assignments
+          if (jobIds.length > 0) {
+            const verifiedJobs = await tx.job.findMany({
+              where: {
+                id: { in: jobIds },
                 organizationId,
-                entityType: HandoverEntityType.JOB,
-                entityId: jobId,
-                fromUserId: handover.fromUserId,
-                toUserId: handover.toUserId,
-                handoverRequestId: handover.id,
-                transferredById: userId,
-                reason: handover.reason,
+                OR: [
+                  { ownerId: handover.fromUserId },
+                  { assignments: { some: { recruiterId: handover.fromUserId, status: 'ACTIVE' } } },
+                ],
+              },
+              select: { id: true, title: true, clientId: true, ownerId: true },
+            });
+
+            if (verifiedJobs.length !== jobIds.length) {
+              throw new Error(
+                'JOB_OWNERSHIP_MISMATCH: One or more jobs are not assigned to source recruiter or do not exist'
+              );
+            }
+
+            // Verify target recruiter has client access for every selected job
+            const clientIds = [...new Set(verifiedJobs.map((j) => j.clientId))];
+            const targetClientAccesses = await tx.clientAccess.findMany({
+              where: {
+                clientId: { in: clientIds },
+                userId: handover.toUserId,
               },
             });
-          }
-        }
 
-        // 3. Transfer Open Tasks (Completed tasks never transfer)
-        if (taskIds.length > 0) {
-          await tx.task.updateMany({
-            where: {
-              id: { in: taskIds },
-              status: { not: 'COMPLETED' },
+            for (const access of targetClientAccesses) {
+              if (Array.isArray(access.authorizedJobIds) && (access.authorizedJobIds as string[]).length > 0) {
+                const forbiddenJobs = verifiedJobs.filter(
+                  (j) => j.clientId === access.clientId && !(access.authorizedJobIds as string[]).includes(j.id)
+                );
+                if (forbiddenJobs.length > 0) {
+                  throw new Error(
+                    `TARGET_LACKS_CLIENT_ACCESS: Target recruiter lacks access to ${forbiddenJobs.length} selected job(s)`
+                  );
+                }
+              }
+            }
+
+            const verifiedJobIds = verifiedJobs.map((j) => j.id);
+            await tx.job.updateMany({
+              where: { id: { in: verifiedJobIds }, ownerId: handover.fromUserId },
+              data: { ownerId: handover.toUserId },
+            });
+
+            for (const job of verifiedJobs) {
+              await tx.jobAssignment.updateMany({
+                where: { jobId: job.id, recruiterId: handover.fromUserId, status: 'ACTIVE' },
+                data: { status: 'REASSIGNED' },
+              });
+
+              const existing = await tx.jobAssignment.findFirst({
+                where: { jobId: job.id, recruiterId: handover.toUserId },
+              });
+              if (existing) {
+                await tx.jobAssignment.update({
+                  where: { id: existing.id },
+                  data: { status: 'ACTIVE', assignedById: userId },
+                });
+              } else {
+                await tx.jobAssignment.create({
+                  data: {
+                    jobId: job.id,
+                    recruiterId: handover.toUserId,
+                    assignedById: userId,
+                    status: 'ACTIVE',
+                  },
+                });
+              }
+
+              // Record OwnershipHistory strictly for verified transferred jobs
+              await tx.ownershipHistory.create({
+                data: {
+                  organizationId,
+                  entityType: HandoverEntityType.JOB,
+                  entityId: job.id,
+                  fromUserId: handover.fromUserId,
+                  toUserId: handover.toUserId,
+                  handoverRequestId: handover.id,
+                  transferredById: userId,
+                  reason: handover.reason,
+                },
+              });
+            }
+          }
+
+          // 3. Verify and Transfer Open Tasks (Completed tasks are strictly excluded)
+          if (taskIds.length > 0) {
+            const eligibleTasks = await tx.task.findMany({
+              where: {
+                id: { in: taskIds },
+                assignedToId: handover.fromUserId,
+                status: { not: 'COMPLETED' },
+              },
+              select: { id: true, title: true },
+            });
+
+            if (eligibleTasks.length > 0) {
+              const eligibleTaskIds = eligibleTasks.map((t) => t.id);
+              await tx.task.updateMany({
+                where: { id: { in: eligibleTaskIds } },
+                data: { assignedToId: handover.toUserId },
+              });
+
+              // Record OwnershipHistory strictly for verified transferred tasks (excluding completed tasks)
+              for (const task of eligibleTasks) {
+                await tx.ownershipHistory.create({
+                  data: {
+                    organizationId,
+                    entityType: HandoverEntityType.TASK,
+                    entityId: task.id,
+                    fromUserId: handover.fromUserId,
+                    toUserId: handover.toUserId,
+                    handoverRequestId: handover.id,
+                    transferredById: userId,
+                    reason: handover.reason,
+                  },
+                });
+              }
+            }
+          }
+
+          return tx.handoverRequest.findUniqueOrThrow({
+            where: { id },
+            include: {
+              fromUser: { select: { id: true, name: true, email: true } },
+              toUser: { select: { id: true, name: true, email: true } },
+              reviewedBy: { select: { id: true, name: true, email: true } },
             },
-            data: { assignedToId: handover.toUserId },
           });
-
-          for (const taskId of taskIds) {
-            await tx.ownershipHistory.create({
-              data: {
-                organizationId,
-                entityType: HandoverEntityType.TASK,
-                entityId: taskId,
-                fromUserId: handover.fromUserId,
-                toUserId: handover.toUserId,
-                handoverRequestId: handover.id,
-                transferredById: userId,
-                reason: handover.reason,
-              },
-            });
-          }
-        }
-
-        // 4. Mark Request Approved
-        const approvedReq = await tx.handoverRequest.update({
-          where: { id },
-          data: {
-            status: HandoverStatus.APPROVED,
-            reviewedById: userId,
-            reviewedAt: new Date(),
-          },
-          include: {
-            fromUser: { select: { id: true, name: true, email: true } },
-            toUser: { select: { id: true, name: true, email: true } },
-            reviewedBy: { select: { id: true, name: true, email: true } },
-          },
         });
 
-        return approvedReq;
-      });
+        // Post-transaction notifications
+        try {
+          await Promise.all([
+            prisma.notification.create({
+              data: {
+                userId: handover.toUserId,
+                title: 'Handover Approved & Portfolio Transferred',
+                message: `You are now the active owner of ${candidateIds.length} candidate(s), ${jobIds.length} job(s), and open tasks from handover #${handover.id.slice(0, 8)}.`,
+                type: 'IN_APP',
+                category: 'SYSTEM',
+                linkUrl: '/handover',
+              },
+            }),
+            prisma.notification.create({
+              data: {
+                userId: handover.fromUserId,
+                title: 'Handover Successfully Completed',
+                message: `Your handover of ${candidateIds.length} candidate(s) and ${jobIds.length} job(s) to ${updated.toUser.name} has been approved by manager.`,
+                type: 'IN_APP',
+                category: 'SYSTEM',
+                linkUrl: '/handover',
+              },
+            }),
+          ]);
+        } catch (err) {
+          server.log.error(err, 'Failed to create handover completion notifications');
+        }
 
-      // Post-transaction notifications
-      try {
-        await Promise.all([
-          prisma.notification.create({
-            data: {
-              userId: handover.toUserId,
-              title: 'Handover Approved & Portfolio Transferred',
-              message: `You are now the active owner of ${candidateIds.length} candidate(s), ${jobIds.length} job(s), and open tasks from handover #${handover.id.slice(0, 8)}.`,
-              type: 'IN_APP',
-              category: 'SYSTEM',
-              linkUrl: '/handover',
-            },
-          }),
-          prisma.notification.create({
-            data: {
-              userId: handover.fromUserId,
-              title: 'Handover Successfully Completed',
-              message: `Your handover of ${candidateIds.length} candidate(s) and ${jobIds.length} job(s) to ${updated.toUser.name} has been approved by manager.`,
-              type: 'IN_APP',
-              category: 'SYSTEM',
-              linkUrl: '/handover',
-            },
-          }),
-        ]);
-      } catch (err) {
-        server.log.error(err, 'Failed to create handover completion notifications');
+        return reply.send({
+          success: true,
+          data: updated,
+        });
+      } catch (err: any) {
+        if (err.message === 'HANDOVER_ALREADY_REVIEWED_OR_INACTIVE') {
+          return reply.status(400).send({
+            success: false,
+            error: 'Handover request is no longer pending or has already been reviewed',
+          });
+        }
+        if (
+          err.message &&
+          (err.message.startsWith('CANDIDATE_OWNERSHIP_MISMATCH') ||
+            err.message.startsWith('JOB_OWNERSHIP_MISMATCH') ||
+            err.message.startsWith('TARGET_LACKS_CLIENT_ACCESS') ||
+            err.message.startsWith('TARGET_RECRUITER_INACTIVE'))
+        ) {
+          return reply.status(400).send({
+            success: false,
+            error: err.message,
+          });
+        }
+        throw err;
       }
-
-      return reply.send({
-        success: true,
-        data: updated,
-      });
     }
   );
 

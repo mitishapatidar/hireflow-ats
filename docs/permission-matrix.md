@@ -7,7 +7,11 @@
 | **Job Records** | Full | Team Scope | Assigned Only | Authorized Only | Public Careers | Client restricted to `authorizedJobIds`. |
 | **Client Submissions** | Full | Approve/Reject | Create / View | View / Approve | ❌ BLOCKED | Manager / Client approval required for stages. |
 | **Commercial Terms & Margin**| Full | View/Approve | ❌ BLOCKED | ❌ BLOCKED | ❌ BLOCKED | Financial terms restricted to Manager & Admin. |
-| **Offers & Placements** | Full | Full / Confirm | Create / Release | ❌ Masked | Self Offer | Client & Candidate responses mask agency margins and fees. |
+| **Offers & Placements** | Full | Full | Create / View | Authorized Only | Self Offer | Client restricted by `authorizedJobIds`; candidate self-only. |
+| **Joining Confirmation & Commercial Fees** | Full | Confirm & Adjust | ❌ BLOCKED | ❌ BLOCKED | ❌ BLOCKED | Server calculates fees. Fee adjustments strictly Admin/Manager. |
+| **Placement Payments & Ledger** | Full | Manage & Reconcile | Masked (No Fees) | ❌ Masked | ❌ Masked | Commercial ledger, installments and status waivers. |
+| **Recruiter Handover Approval** | Full | Review & Approve | Request / View | ❌ BLOCKED | ❌ BLOCKED | Approval execution is restricted to Admin & Manager. |
+| **Ownership History Audit** | Full | Team Scope | Own History | ❌ BLOCKED | ❌ BLOCKED | Append-only resource transfer audit logs. |
 | **Global Command Search (Ctrl+K)** | Full | Full | Internal Scope | Client Scoped | ❌ BLOCKED | Zero data leak of unsubmitted candidates or peer client data. |
 | **Recruitment Analytics & MIS** | Full | Full | Own Activity | ❌ BLOCKED | ❌ BLOCKED | IST boundary calculations. External roles blocked. |
 | **Mobile Recruiter Today (/mobile/today)** | Full | Full | Own Agenda | ❌ BLOCKED | ❌ BLOCKED | Touch-optimised daily agenda, call log, quick notes. |

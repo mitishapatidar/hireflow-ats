@@ -43,9 +43,23 @@ export type DeclineOfferInput = z.infer<typeof DeclineOfferSchema>;
 
 export const ConfirmJoiningSchema = z.object({
   joinedAt: z.string().optional(),
-  feeBasis: z.enum(['PERCENTAGE', 'FLAT']).default('PERCENTAGE'),
-  feeAmount: z.number().positive('Fee amount must be greater than zero'),
-  paymentTerms: z.string().default('NET_30'),
+  joiningEvidence: z
+    .object({
+      source: z.string().default('RECRUITER_VERIFIED'),
+      confirmedBy: z.string().min(1, 'Name or contact of person confirming is required'),
+      confirmedAt: z.string().optional(),
+      documentUrl: z.string().url().optional().nullable(),
+      notes: z.string().optional().nullable(),
+    })
+    .optional(),
+  adjustmentAmount: z.number().min(0, 'Adjustment amount must be non-negative').default(0).optional(),
+  adjustmentReason: z.string().optional().nullable(),
+  invoiceNumber: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  // Legacy fields accepted for schema backward compatibility if passed by older callers, but strictly ignored server-side
+  feeBasis: z.string().optional(),
+  feeAmount: z.number().optional(),
+  paymentTerms: z.string().optional(),
   dueDate: z.string().optional().nullable(),
 });
 

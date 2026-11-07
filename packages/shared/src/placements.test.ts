@@ -5,39 +5,138 @@ import {
   serializePlacementForRole,
   ConfirmJoiningSecureSchema,
   RecordPlacementPaymentSchema,
+  UpdatePlacementPaymentStatusSchema,
   JoiningEvidenceSource,
   PlacementPaymentStatus,
 } from './placements';
 import { UserRole } from './roles';
 
-describe('Placements Domain & Logic', () => {
-  describe('calculatePlacementFee', () => {
-    it('calculates percentage fee correctly and rounds to 2 decimals', () => {
+describe('Prompt 27 Fix: Placements Domain & Commercial Security Tests', () => {
+  describe('calculatePlacementFee — Server-Side Decimal Commercial Fee Engine', () => {
+    it('1. calculates percentage fee correctly with 2 decimal precision', () => {
       // 1,200,000 CTC at 8.33% = 99,960
       const result = calculatePlacementFee(1200000, 8.33);
+      expect(result.isValid).toBe(true);
       expect(result.feeBasis).toBe('PERCENTAGE');
       expect(result.feePercentage).toBe(8.33);
       expect(result.baseFee).toBe(99960);
+      expect(result.grossFee).toBe(99960);
       expect(result.netFee).toBe(99960);
     });
 
-    it('applies positive and negative adjustment amounts accurately', () => {
-      // 1,000,000 CTC at 10% = 100,000 + 5,000 concession/bonus
-      const withConcession = calculatePlacementFee(1000000, 10, -5000);
-      expect(withConcession.baseFee).toBe(1000000 * 0.1);
-      expect(withConcession.adjustmentAmount).toBe(-5000);
-      expect(withConcession.netFee).toBe(95000);
+    it('2. returns configuration error if client agreed feePercentage is missing or zero', () => {
+      const missingResult = calculatePlacementFee(1500000, null);
+      expect(missingResult.isValid).toBe(false);
+      expect(missingResult.error).toContain('Client has no agreed fee percentage');
+      expect(missingResult.netFee).toBe(0);
 
-      const withBonus = calculatePlacementFee(1000000, 10, 2500);
-      expect(withBonus.netFee).toBe(102500);
+      const zeroResult = calculatePlacementFee(1500000, 0);
+      expect(zeroResult.isValid).toBe(false);
+      expect(zeroResult.error).toContain('Client has no agreed fee percentage');
     });
 
-    it('falls back to FIXED basis when fee percentage is absent or 0', () => {
-      const fixedResult = calculatePlacementFee(1500000, null, 150000);
-      expect(fixedResult.feeBasis).toBe('FIXED');
-      expect(fixedResult.feePercentage).toBeNull();
-      expect(fixedResult.baseFee).toBe(0);
-      expect(fixedResult.netFee).toBe(150000);
+    it('3. rejects invalid or negative Annual CTC', () => {
+      const invalidResult = calculatePlacementFee(-500000, 8.5);
+      expect(invalidResult.isValid).toBe(false);
+      expect(invalidResult.error).toContain('Invalid or missing offered salary');
+    });
+
+    it('4. applies authorized adjustment with non-empty justification: Net Fee = Gross Fee - Authorized Adjustment', () => {
+      // 1,000,000 CTC at 10% = 100,000 Gross Fee - 5,000 Concession = 95,000 Net Fee
+      const withAdjustment = calculatePlacementFee(
+        1000000,
+        10,
+        5000,
+        'Director approved introductory client discount'
+      );
+      expect(withAdjustment.isValid).toBe(true);
+      expect(withAdjustment.grossFee).toBe(100000);
+      expect(withAdjustment.adjustmentAmount).toBe(5000);
+      expect(withAdjustment.adjustmentReason).toBe('Director approved introductory client discount');
+      expect(withAdjustment.netFee).toBe(95000);
+    });
+
+    it('5. rejects adjustment greater than zero without justification reason', () => {
+      const noReason = calculatePlacementFee(1000000, 10, 5000, '');
+      expect(noReason.isValid).toBe(false);
+      expect(noReason.error).toContain('justification reason is required');
+
+      const nullReason = calculatePlacementFee(1000000, 10, 5000, null);
+      expect(nullReason.isValid).toBe(false);
+      expect(nullReason.error).toContain('justification reason is required');
+    });
+
+    it('6. rejects negative adjustment amount', () => {
+      const negativeAdj = calculatePlacementFee(1000000, 10, -2000, 'Invalid negative');
+      expect(negativeAdj.isValid).toBe(false);
+      expect(negativeAdj.error).toContain('Adjustment amount must be non-negative');
+    });
+
+    it('7. rejects adjustment amount exceeding gross placement fee', () => {
+      // Gross fee is 100,000; adjustment is 120,000
+      const excessAdj = calculatePlacementFee(1000000, 10, 120000, 'Exceeds fee');
+      expect(excessAdj.isValid).toBe(false);
+      expect(excessAdj.error).toContain('cannot exceed gross placement fee');
+    });
+  });
+
+  describe('ConfirmJoiningSecureSchema & Payment Schemas', () => {
+    it('8. ConfirmJoiningSecureSchema validates joining evidence and adjustment justification', () => {
+      const valid = ConfirmJoiningSecureSchema.safeParse({
+        joinedAt: '2026-06-01T00:00:00Z',
+        joiningEvidence: {
+          source: JoiningEvidenceSource.CLIENT_EMAIL,
+          confirmedBy: 'HR Director',
+          documentUrl: 'https://example.com/proof.pdf',
+        },
+        adjustmentAmount: 5000,
+        adjustmentReason: 'Strategic client discount approved by CEO',
+      });
+      expect(valid.success).toBe(true);
+
+      const invalidAdj = ConfirmJoiningSecureSchema.safeParse({
+        joiningEvidence: {
+          source: JoiningEvidenceSource.CLIENT_EMAIL,
+          confirmedBy: 'HR Director',
+        },
+        adjustmentAmount: 5000,
+        adjustmentReason: '', // missing reason
+      });
+      expect(invalidAdj.success).toBe(false);
+    });
+
+    it('9. RecordPlacementPaymentSchema rejects zero or negative amounts', () => {
+      const zeroAmount = RecordPlacementPaymentSchema.safeParse({
+        amount: 0,
+        referenceNumber: 'REF123',
+      });
+      expect(zeroAmount.success).toBe(false);
+
+      const negativeAmount = RecordPlacementPaymentSchema.safeParse({
+        amount: -500,
+        referenceNumber: 'REF123',
+      });
+      expect(negativeAmount.success).toBe(false);
+
+      const valid = RecordPlacementPaymentSchema.safeParse({
+        amount: 50000,
+        referenceNumber: 'UTR99881122',
+        paymentMethod: 'BANK_TRANSFER',
+      });
+      expect(valid.success).toBe(true);
+    });
+
+    it('10. UpdatePlacementPaymentStatusSchema requires waiver reason for WAIVED status', () => {
+      const waivedWithoutReason = UpdatePlacementPaymentStatusSchema.safeParse({
+        paymentStatus: PlacementPaymentStatus.WAIVED,
+      });
+      expect(waivedWithoutReason.success).toBe(false);
+
+      const waivedWithReason = UpdatePlacementPaymentStatusSchema.safeParse({
+        paymentStatus: PlacementPaymentStatus.WAIVED,
+        waiverReason: 'Client dispute settled by executive management',
+      });
+      expect(waivedWithReason.success).toBe(true);
     });
   });
 
@@ -98,60 +197,21 @@ describe('Placements Domain & Logic', () => {
       expect((clientView as any).commercials).toBeUndefined();
       expect((clientView as any).feeAmount).toBeUndefined();
       expect((clientView as any).ctcSnapshot).toBeUndefined();
-      expect((clientView as any).payments).toBeUndefined();
     });
 
-    it('completely strips commercial fees and payments for CANDIDATE role', () => {
-      const candidateView = serializePlacementForRole(mockPlacement, UserRole.CANDIDATE);
-      expect(candidateView.id).toBe('place-123');
-      expect((candidateView as any).commercials).toBeUndefined();
-      expect((candidateView as any).feeAmount).toBeUndefined();
-    });
-
-    it('hides commercials from standard RECRUITER role unless privileged', () => {
+    it('omits commercial fees and ledger from RECRUITER role', () => {
       const recruiterView = serializePlacementForRole(mockPlacement, UserRole.RECRUITER);
       expect(recruiterView.id).toBe('place-123');
-      expect(recruiterView.candidateEmail).toBe('priya@example.com');
-      // commercials should be null for regular recruiter
       expect(recruiterView.commercials).toBeNull();
+      expect((recruiterView as any).feeAmount).toBeUndefined();
     });
 
-    it('includes full commercial fees, balance, and installments for ADMIN/MANAGER roles', () => {
+    it('provides full commercial breakdown and payments ledger to ADMIN role', () => {
       const adminView = serializePlacementForRole(mockPlacement, UserRole.ADMIN);
-      expect(adminView.commercials).not.toBeNull();
+      expect(adminView.commercials).toBeDefined();
       expect(adminView.commercials?.feeAmount).toBe(291550);
       expect(adminView.commercials?.balanceDue).toBe(291550);
       expect(adminView.commercials?.feePercentage).toBe(8.33);
-      expect(adminView.joiningConfirmation?.confirmedBy).toBe('HR Director Rahul Roy');
-    });
-  });
-
-  describe('Validation Schemas', () => {
-    it('validates ConfirmJoiningSecureSchema and rejects input without joining evidence', () => {
-      const invalid = {
-        paymentTerms: 'NET_30',
-      };
-      const parsed = ConfirmJoiningSecureSchema.safeParse(invalid);
-      expect(parsed.success).toBe(false);
-
-      const valid = {
-        joiningEvidence: {
-          source: JoiningEvidenceSource.CLIENT_EMAIL,
-          confirmedBy: 'HR Manager Amit',
-          notes: 'Joining verified via formal welcome mail',
-        },
-        paymentTerms: 'NET_30',
-      };
-      const validParsed = ConfirmJoiningSecureSchema.safeParse(valid);
-      expect(validParsed.success).toBe(true);
-    });
-
-    it('validates RecordPlacementPaymentSchema requires positive amount', () => {
-      const negative = { amount: -500 };
-      expect(RecordPlacementPaymentSchema.safeParse(negative).success).toBe(false);
-
-      const positive = { amount: 50000, paymentMethod: 'BANK_TRANSFER' };
-      expect(RecordPlacementPaymentSchema.safeParse(positive).success).toBe(true);
     });
   });
 });

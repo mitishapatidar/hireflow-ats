@@ -266,6 +266,51 @@ describe('Prompt 27: Placement Records & Commercial Fees Integration Tests', () 
     expect(body.data.placement.commercials.paidAt).toBeDefined();
   });
 
+  it('8b. POST /api/placements/:id/payments rejects overpayment beyond total commercial fee', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/placements/${testPlacementId}/payments`,
+      headers: { cookie: adminCookie },
+      payload: {
+        amount: 50000, // Total fee is 170000, and 170000 is already received
+        paymentMethod: 'BANK_TRANSFER',
+        referenceNumber: 'NEFT_EXCESS_1',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.payload);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('OVERPAYMENT_NOT_PERMITTED');
+  });
+
+  it('8c. POST /api/placements/:id/payments rejects negative or zero payment amount', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/placements/${testPlacementId}/payments`,
+      headers: { cookie: adminCookie },
+      payload: {
+        amount: -1000,
+        referenceNumber: 'NEFT_NEG',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('8d. PATCH /api/placements/:id/payment-status rejects WAIVED status without mandatory waiver reason', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/placements/${testPlacementId}/payment-status`,
+      headers: { cookie: adminCookie },
+      payload: {
+        paymentStatus: PaymentStatus.WAIVED,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
   it('9. GET /api/placements/:id/history returns immutable event log', async () => {
     const res = await app.inject({
       method: 'GET',

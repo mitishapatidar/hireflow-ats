@@ -21,8 +21,19 @@ Every resource transfer creates an immutable record in `OwnershipHistory`:
 
 ---
 
-## 2. Immutability & Querying
-- Records in `OwnershipHistory` cannot be updated or deleted.
+## 2. Immutability Guarantees & Architectural Boundaries
+- **Application-Level Append-Only Enforcement**:
+  - The API layer (`/api/handover/*`) and Server Actions (`apps/web/src/actions/handover.ts`) strictly provide insertion and read-only query endpoints.
+  - No update or delete endpoints or mutations exist in the application code for `OwnershipHistory` rows.
+- **Database Immutability & Trigger Scope**:
+  - True database-level immutability (PostgreSQL append-only triggers preventing SQL `UPDATE` or `DELETE` statements at the engine level) requires custom database migrations and trigger functions.
+  - In accordance with `AGENTS.md` rules requiring explicit user approval before modifying database schemas or migrations, database-level triggers are documented as an infrastructure enhancement and have not been executed without explicit migration authorization.
+- **Verified-Only Recording**:
+  - History rows are created exclusively for entities whose ownership transfer was verified and executed within the atomic transaction.
+
+---
+
+## 3. Querying & Dashboards
 - Accessible via the `/handover/history` dashboard and `GET /api/handover/ownership-history`.
 - Supports filtering by:
   - Resource Entity Type (`CANDIDATE`, `JOB`, `TASK`).

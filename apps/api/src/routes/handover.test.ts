@@ -245,6 +245,65 @@ describe('Prompt 27: Recruiter Handover & Ownership History Integration Tests', 
     expect(updatedTask.assignedToId).toBe(recruiter2.id);
   });
 
+  it('5b. POST /api/handover/requests/:id/approve rejects duplicate / concurrent approval', async () => {
+    // Attempting to re-approve the already approved handover request
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/handover/requests/${createdHandoverId}/approve`,
+      headers: { cookie: managerCookie },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.payload);
+    expect(body.success).toBe(false);
+  });
+
+  it('5c. POST /api/handover/requests/:id/approve rejects candidate ownership mismatch inside transaction', async () => {
+    // Create candidate owned by a different recruiter
+    const otherCandidate = await prisma.candidate.create({
+      data: {
+        organizationId: 'org-aureva-1',
+        code: `CAND-OTH-${Date.now().toString().slice(-4)}`,
+        name: 'Other Recruiter Candidate',
+        email: `other-cand-${Date.now()}@example.com`,
+        ownerId: recruiter2.id, // owned by recruiter2, not recruiter1
+      },
+    });
+
+    const forgedRequest = await prisma.handoverRequest.create({
+      data: {
+        organizationId: 'org-aureva-1',
+        fromUserId: recruiter1.id,
+        toUserId: recruiter2.id,
+        requestedById: recruiter1.id,
+        candidateIds: [otherCandidate.id],
+        jobIds: [],
+        taskIds: [],
+        reason: 'Attempting to transfer candidate not owned by fromUser',
+        status: HandoverStatus.PENDING,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/handover/requests/${forgedRequest.id}/approve`,
+      headers: { cookie: managerCookie },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.payload);
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('CANDIDATE_OWNERSHIP_MISMATCH');
+
+    // Verify candidate was NOT transferred
+    const unchanged = await prisma.candidate.findUniqueOrThrow({ where: { id: otherCandidate.id } });
+    expect(unchanged.ownerId).toBe(recruiter2.id);
+
+    // Cleanup
+    await prisma.handoverRequest.delete({ where: { id: forgedRequest.id } });
+    await prisma.candidate.delete({ where: { id: otherCandidate.id } });
+  });
+
   it('6. GET /api/handover/ownership-history returns permanent audit trail of transfers', async () => {
     const res = await app.inject({
       method: 'GET',

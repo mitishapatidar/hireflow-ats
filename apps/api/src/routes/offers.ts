@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { prisma } from '@hireflow/db';
+import { prisma, Prisma } from '@hireflow/db';
 import {
   UserRole,
   OfferStatus,
@@ -381,101 +381,162 @@ export const offerRoutes: FastifyPluginAsync = async (server: FastifyInstance) =
 
       const joinedDate = input.joinedAt ? new Date(input.joinedAt) : new Date();
 
-      // Server-side calculated placement commercial fee
+      // Server-side authoritative commercial fee calculation (Decimal precision)
+      // Client-supplied feeAmount, feeBasis, and dueDates are STRICTLY IGNORED.
       const feeCalc = calculatePlacementFee(
         Number(offer.offeredSalary),
         offer.client?.feePercentage ? Number(offer.client.feePercentage) : null,
-        input.adjustmentAmount ?? 0
+        input.adjustmentAmount ?? 0,
+        input.adjustmentReason
       );
-      const finalFeeAmount = feeCalc.baseFee > 0 ? feeCalc.netFee : (input.feeAmount || feeCalc.netFee);
-      const feeBasis = feeCalc.baseFee > 0 ? feeCalc.feeBasis : (input.feeBasis || 'PERCENTAGE');
-      const dueDate = input.dueDate
-        ? new Date(input.dueDate)
-        : calculatePaymentDueDate(joinedDate, input.paymentTerms || 'NET_30');
 
-      // Transactional Placement Creation
-      const [updatedOffer, placement] = await prisma.$transaction(async (tx) => {
-        const newPlacement = await tx.placement.create({
-          data: {
-            applicationId: offer.applicationId,
-            clientId: offer.clientId,
-            organizationId,
-            feeBasis,
-            ctcSnapshot: offer.offeredSalary,
-            feePercentage: offer.client?.feePercentage ?? null,
-            feeAmount: finalFeeAmount,
-            adjustmentAmount: feeCalc.adjustmentAmount,
-            adjustmentReason: input.adjustmentReason || null,
-            paymentTerms: input.paymentTerms || 'NET_30',
-            dueDate,
-            paymentStatus: PaymentStatus.PENDING,
-            amountReceived: 0,
-            invoiceNumber: input.invoiceNumber || null,
-            notes: input.notes || null,
-            joiningDate: joinedDate,
-            createdById: userId,
+      if (!feeCalc.isValid) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'CLIENT_FEE_AGREEMENT_MISSING',
+            message: feeCalc.error || 'Failed to calculate placement fee based on client agreement',
           },
         });
+      }
 
-        // Create Joining Confirmation evidence record
-        await tx.joiningConfirmation.create({
-          data: {
-            placementId: newPlacement.id,
-            source: input.joiningEvidence?.source || 'RECRUITER_VERIFIED',
-            confirmedBy: input.joiningEvidence?.confirmedBy || request.user.name || request.user.email || 'Recruiter',
-            confirmedAt: input.joiningEvidence?.confirmedAt ? new Date(input.joiningEvidence.confirmedAt) : new Date(),
-            documentUrl: input.joiningEvidence?.documentUrl || null,
-            notes: input.joiningEvidence?.notes || null,
-            createdById: userId,
-          },
-        });
+      const finalFeeAmount = new Prisma.Decimal(feeCalc.netFee);
+      const feeBasis = feeCalc.feeBasis;
+      const paymentTerms = offer.client?.paymentTerms || 'NET_30';
+      const dueDate = calculatePaymentDueDate(joinedDate, paymentTerms);
 
-        // Create initial Placement History record
-        await tx.placementHistory.create({
-          data: {
-            placementId: newPlacement.id,
-            eventType: 'CREATED',
-            actorId: userId,
-            actorRole: request.user.role,
-            newState: {
-              feeAmount: finalFeeAmount,
-              status: PaymentStatus.PENDING,
-              ctc: Number(offer.offeredSalary),
+      try {
+        // Transactional Placement Creation with Concurrency Guard
+        const [updatedOffer, placement] = await prisma.$transaction(async (tx) => {
+          // Concurrency lock: update offer only if still in ACCEPTED status without placement
+          const updatedOfferCount = await tx.offer.updateMany({
+            where: {
+              id,
+              organizationId,
+              status: OfferStatus.ACCEPTED,
+              placementId: null,
             },
-            notes: 'Candidate joining confirmed and placement created.',
-          },
+            data: {
+              status: OfferStatus.JOINED,
+              joinedAt: joinedDate,
+            },
+          });
+
+          if (updatedOfferCount.count === 0) {
+            throw new Error('OFFER_CONCURRENT_JOINING_CONFLICT');
+          }
+
+          // Check application duplicate inside transaction
+          const existingInsideTx = await tx.placement.findUnique({
+            where: { applicationId: offer.applicationId },
+          });
+          if (existingInsideTx) {
+            throw new Error('PLACEMENT_ALREADY_EXISTS');
+          }
+
+          const newPlacement = await tx.placement.create({
+            data: {
+              applicationId: offer.applicationId,
+              clientId: offer.clientId,
+              organizationId,
+              feeBasis,
+              ctcSnapshot: offer.offeredSalary,
+              feePercentage: offer.client?.feePercentage ?? null,
+              feeAmount: finalFeeAmount,
+              adjustmentAmount: new Prisma.Decimal(feeCalc.adjustmentAmount),
+              adjustmentReason: feeCalc.adjustmentReason,
+              paymentTerms,
+              dueDate,
+              paymentStatus: PaymentStatus.PENDING,
+              amountReceived: new Prisma.Decimal(0),
+              invoiceNumber: input.invoiceNumber || null,
+              notes: input.notes || null,
+              joiningDate: joinedDate,
+              createdById: userId,
+            },
+          });
+
+          // Link placement back to Offer
+          await tx.offer.update({
+            where: { id },
+            data: {
+              placementId: newPlacement.id,
+            },
+          });
+
+          // Create Joining Confirmation evidence record
+          await tx.joiningConfirmation.create({
+            data: {
+              placementId: newPlacement.id,
+              source: input.joiningEvidence?.source || 'RECRUITER_VERIFIED',
+              confirmedBy:
+                input.joiningEvidence?.confirmedBy || request.user.name || request.user.email || 'Recruiter',
+              confirmedAt: input.joiningEvidence?.confirmedAt
+                ? new Date(input.joiningEvidence.confirmedAt)
+                : new Date(),
+              documentUrl: input.joiningEvidence?.documentUrl || null,
+              notes: input.joiningEvidence?.notes || null,
+              createdById: userId,
+            },
+          });
+
+          // Create initial Placement History record
+          await tx.placementHistory.create({
+            data: {
+              placementId: newPlacement.id,
+              eventType: 'CREATED',
+              actorId: userId,
+              actorRole: request.user.role,
+              newState: {
+                grossFee: feeCalc.grossFee,
+                adjustmentAmount: feeCalc.adjustmentAmount,
+                adjustmentReason: feeCalc.adjustmentReason,
+                finalFeeAmount: feeCalc.netFee,
+                status: PaymentStatus.PENDING,
+                ctc: Number(offer.offeredSalary),
+              },
+              notes:
+                feeCalc.adjustmentAmount > 0
+                  ? `Candidate joining confirmed. Concession of ₹${feeCalc.adjustmentAmount} authorized: ${feeCalc.adjustmentReason}`
+                  : 'Candidate joining confirmed and placement created.',
+            },
+          });
+
+          // Update application status to PLACED
+          await tx.application.update({
+            where: { id: offer.applicationId },
+            data: { status: 'PLACED' as any },
+          });
+
+          const freshOffer = await tx.offer.findUniqueOrThrow({ where: { id } });
+          return [freshOffer, newPlacement];
         });
 
-        const off = await tx.offer.update({
-          where: { id },
-          data: {
-            status: OfferStatus.JOINED,
-            joinedAt: joinedDate,
-            placementId: newPlacement.id,
-          },
-        });
-
-        // Update application status to PLACED
-        await tx.application.update({
-          where: { id: offer.applicationId },
-          data: { status: 'PLACED' as any },
-        });
-
-        return [off, newPlacement];
-      });
-
-      await logOfferAudit(userId, 'OFFER_CONFIRMED_JOINED', id, offer, {
-        offer: updatedOffer,
-        placement,
-      });
-
-      return reply.status(201).send({
-        success: true,
-        data: {
+        await logOfferAudit(userId, 'OFFER_CONFIRMED_JOINED', id, offer, {
           offer: updatedOffer,
           placement,
-        },
-      });
+        });
+
+        return reply.status(201).send({
+          success: true,
+          data: {
+            offer: updatedOffer,
+            placement,
+          },
+        });
+      } catch (err: any) {
+        if (
+          err.message === 'OFFER_CONCURRENT_JOINING_CONFLICT' ||
+          err.message === 'PLACEMENT_ALREADY_EXISTS' ||
+          err.code === 'P2002'
+        ) {
+          return reply.status(409).send({
+            success: false,
+            error: 'A confirmed placement already exists for this candidate application',
+          });
+        }
+        throw err;
+      }
     }
   );
 };
