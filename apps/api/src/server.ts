@@ -33,6 +33,8 @@ import { candidatePortalRoutes } from './routes/candidate-portal.js';
 import { reportsRoutes } from './routes/reports.js';
 import { offerRoutes } from './routes/offers.js';
 import { searchRoutes } from './routes/search.js';
+import { placementRoutes } from './routes/placements.js';
+import { handoverRoutes } from './routes/handover.js';
 
 dotenv.config();
 
@@ -162,6 +164,8 @@ export function buildServer() {
   server.register(reportsRoutes, { prefix: '/api/reports' });
   server.register(offerRoutes, { prefix: '/api/offers' });
   server.register(searchRoutes, { prefix: '/api/search' });
+  server.register(placementRoutes, { prefix: '/api/placements' });
+  server.register(handoverRoutes, { prefix: '/api/handover' });
 
   return server;
 }

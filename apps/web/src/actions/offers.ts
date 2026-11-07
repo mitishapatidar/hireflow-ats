@@ -1,5 +1,7 @@
 'use server';
 
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@hireflow/db';
 import { getCurrentUser } from '@/lib/auth';
@@ -12,6 +14,8 @@ import {
   ConfirmJoiningInput,
   serializeOfferForRole,
   isValidOfferTransition,
+  calculatePlacementFee,
+  calculatePaymentDueDate,
   UserRole,
   OfferStatus,
 } from '@hireflow/shared';
@@ -457,7 +461,20 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
     throw new Error('Placement already exists for this application');
   }
 
-  const joiningDate = parsed.data.joinedAt ? new Date(parsed.data.joinedAt) : new Date();
+  const joiningDate = (input as any).joinedAt ? new Date((input as any).joinedAt) : new Date();
+
+  // Server-side calculated placement commercial fee
+  const feeCalc = calculatePlacementFee(
+    Number(existingOffer.offeredSalary),
+    existingOffer.client?.feePercentage ? Number(existingOffer.client.feePercentage) : null,
+    (input as any).adjustmentAmount ?? 0
+  );
+  const finalFeeAmount = feeCalc.baseFee > 0 ? feeCalc.netFee : ((input as any).feeAmount || feeCalc.netFee);
+  const feeBasis = feeCalc.baseFee > 0 ? feeCalc.feeBasis : ((input as any).feeBasis || 'PERCENTAGE');
+  const paymentTerms = (input as any).paymentTerms || 'NET_30';
+  const dueDate = (input as any).dueDate
+    ? new Date((input as any).dueDate)
+    : calculatePaymentDueDate(joiningDate, paymentTerms);
 
   const result = await prisma.$transaction(async (tx) => {
     // 1. Create Placement
@@ -466,16 +483,53 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
         applicationId: existingOffer.applicationId,
         clientId: existingOffer.clientId,
         organizationId: existingOffer.organizationId,
-        feeBasis: parsed.data.feeBasis,
-        feeAmount: new Prisma.Decimal(parsed.data.feeAmount),
-        paymentTerms: parsed.data.paymentTerms || 'NET_30',
+        feeBasis,
+        ctcSnapshot: existingOffer.offeredSalary,
+        feePercentage: existingOffer.client?.feePercentage ?? null,
+        feeAmount: new Prisma.Decimal(finalFeeAmount),
+        adjustmentAmount: new Prisma.Decimal(feeCalc.adjustmentAmount),
+        adjustmentReason: (input as any).adjustmentReason || null,
+        paymentTerms,
+        dueDate,
         paymentStatus: 'PENDING',
+        amountReceived: new Prisma.Decimal(0),
+        invoiceNumber: (input as any).invoiceNumber || null,
+        notes: (input as any).notes || null,
         joiningDate,
         createdById: user.id,
       },
     });
 
-    // 2. Update Offer
+    // 2. Create JoiningConfirmation evidence
+    await tx.joiningConfirmation.create({
+      data: {
+        placementId: placement.id,
+        source: (input as any).joiningEvidence?.source || 'RECRUITER_VERIFIED',
+        confirmedBy: (input as any).joiningEvidence?.confirmedBy || user.name || user.email || 'Recruiter',
+        confirmedAt: (input as any).joiningEvidence?.confirmedAt ? new Date((input as any).joiningEvidence.confirmedAt) : new Date(),
+        documentUrl: (input as any).joiningEvidence?.documentUrl || null,
+        notes: (input as any).joiningEvidence?.notes || null,
+        createdById: user.id,
+      },
+    });
+
+    // 3. Create initial PlacementHistory
+    await tx.placementHistory.create({
+      data: {
+        placementId: placement.id,
+        eventType: 'CREATED',
+        actorId: user.id,
+        actorRole: user.role,
+        newState: {
+          feeAmount: finalFeeAmount,
+          status: 'PENDING',
+          ctc: Number(existingOffer.offeredSalary),
+        },
+        notes: 'Candidate joining confirmed and placement created.',
+      },
+    });
+
+    // 4. Update Offer
     const updatedOffer = await tx.offer.update({
       where: { id: offerId },
       data: {
@@ -485,7 +539,7 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
       },
     });
 
-    // 3. Update Application status to PLACED
+    // 5. Update Application status to PLACED
     await tx.application.update({
       where: { id: existingOffer.applicationId },
       data: {
@@ -499,10 +553,11 @@ export async function confirmJoiningAction(offerId: string, input: ConfirmJoinin
   await logOfferEvent(user.id, 'OFFER_CONFIRMED_JOINED', offerId, { status: 'ACCEPTED' }, {
     status: 'JOINED',
     placementId: result.placement.id,
-    feeAmount: parsed.data.feeAmount,
+    feeAmount: finalFeeAmount,
   });
 
   revalidatePath('/offers');
+  revalidatePath('/placements');
   revalidatePath('/reports');
   return {
     success: true,

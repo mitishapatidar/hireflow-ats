@@ -10,6 +10,8 @@ import {
   ConfirmJoiningSchema,
   isValidOfferTransition,
   serializeOfferForRole,
+  calculatePlacementFee,
+  calculatePaymentDueDate,
 } from '@hireflow/shared';
 import { requireRole } from '../plugins/auth.js';
 import { MetricsService } from '../services/metrics.js';
@@ -347,11 +349,11 @@ export const offerRoutes: FastifyPluginAsync = async (server: FastifyInstance) =
         return reply.status(400).send({ success: false, error: parseResult.error.flatten() });
       }
 
-      const input = parseResult.data;
+      const input = (request.body as any) || {};
 
       const offer = await prisma.offer.findUnique({
         where: { id },
-        include: { placement: true },
+        include: { placement: true, client: true },
       });
 
       if (!offer || offer.organizationId !== organizationId) {
@@ -379,6 +381,18 @@ export const offerRoutes: FastifyPluginAsync = async (server: FastifyInstance) =
 
       const joinedDate = input.joinedAt ? new Date(input.joinedAt) : new Date();
 
+      // Server-side calculated placement commercial fee
+      const feeCalc = calculatePlacementFee(
+        Number(offer.offeredSalary),
+        offer.client?.feePercentage ? Number(offer.client.feePercentage) : null,
+        input.adjustmentAmount ?? 0
+      );
+      const finalFeeAmount = feeCalc.baseFee > 0 ? feeCalc.netFee : (input.feeAmount || feeCalc.netFee);
+      const feeBasis = feeCalc.baseFee > 0 ? feeCalc.feeBasis : (input.feeBasis || 'PERCENTAGE');
+      const dueDate = input.dueDate
+        ? new Date(input.dueDate)
+        : calculatePaymentDueDate(joinedDate, input.paymentTerms || 'NET_30');
+
       // Transactional Placement Creation
       const [updatedOffer, placement] = await prisma.$transaction(async (tx) => {
         const newPlacement = await tx.placement.create({
@@ -386,13 +400,49 @@ export const offerRoutes: FastifyPluginAsync = async (server: FastifyInstance) =
             applicationId: offer.applicationId,
             clientId: offer.clientId,
             organizationId,
-            feeBasis: input.feeBasis,
-            feeAmount: input.feeAmount,
-            paymentTerms: input.paymentTerms,
-            dueDate: input.dueDate ? new Date(input.dueDate) : null,
+            feeBasis,
+            ctcSnapshot: offer.offeredSalary,
+            feePercentage: offer.client?.feePercentage ?? null,
+            feeAmount: finalFeeAmount,
+            adjustmentAmount: feeCalc.adjustmentAmount,
+            adjustmentReason: input.adjustmentReason || null,
+            paymentTerms: input.paymentTerms || 'NET_30',
+            dueDate,
             paymentStatus: PaymentStatus.PENDING,
+            amountReceived: 0,
+            invoiceNumber: input.invoiceNumber || null,
+            notes: input.notes || null,
             joiningDate: joinedDate,
             createdById: userId,
+          },
+        });
+
+        // Create Joining Confirmation evidence record
+        await tx.joiningConfirmation.create({
+          data: {
+            placementId: newPlacement.id,
+            source: input.joiningEvidence?.source || 'RECRUITER_VERIFIED',
+            confirmedBy: input.joiningEvidence?.confirmedBy || request.user.name || request.user.email || 'Recruiter',
+            confirmedAt: input.joiningEvidence?.confirmedAt ? new Date(input.joiningEvidence.confirmedAt) : new Date(),
+            documentUrl: input.joiningEvidence?.documentUrl || null,
+            notes: input.joiningEvidence?.notes || null,
+            createdById: userId,
+          },
+        });
+
+        // Create initial Placement History record
+        await tx.placementHistory.create({
+          data: {
+            placementId: newPlacement.id,
+            eventType: 'CREATED',
+            actorId: userId,
+            actorRole: request.user.role,
+            newState: {
+              feeAmount: finalFeeAmount,
+              status: PaymentStatus.PENDING,
+              ctc: Number(offer.offeredSalary),
+            },
+            notes: 'Candidate joining confirmed and placement created.',
           },
         });
 

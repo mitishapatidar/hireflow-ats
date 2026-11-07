@@ -16,8 +16,10 @@ export enum OfferStatus {
 export enum PaymentStatus {
   PENDING = 'PENDING',
   INVOICED = 'INVOICED',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
   PAID = 'PAID',
   OVERDUE = 'OVERDUE',
+  WAIVED = 'WAIVED',
 }
 
 export const CreateOfferSchema = z.object({

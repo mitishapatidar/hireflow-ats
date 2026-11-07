@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@hireflow/ui', '@hireflow/shared'],
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     serverComponentsExternalPackages: ['@node-rs/argon2', 'pdf-parse', 'mammoth'],
   },

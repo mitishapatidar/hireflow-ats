@@ -344,6 +344,25 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
 
   // Prompt 21: Global Search
   { method: 'GET', url: '/api/search', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT, UserRole.CANDIDATE] },
+
+  // Prompt 27: Placements, Fees & Commercial Records
+  { method: 'GET', url: '/api/placements/stats', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/placements/upcoming-offers', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/placements', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/placements/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER, UserRole.CLIENT] },
+  { method: 'PATCH', url: '/api/placements/:id/payment-status', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/placements/:id/payments', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'GET', url: '/api/placements/:id/history', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+
+  // Prompt 27: Recruiter Handover & Ownership History
+  { method: 'GET', url: '/api/handover/requests', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/handover/requests', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/handover/requests/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/handover/requests/:id/approve', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/handover/requests/:id/reject', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { method: 'POST', url: '/api/handover/requests/:id/cancel', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/handover/recruiter-resources/:recruiterId', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/handover/ownership-history', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
 ];
 
 async function runAuthorizationAudit() {

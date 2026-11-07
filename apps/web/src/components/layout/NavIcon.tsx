@@ -33,6 +33,7 @@ import {
   Compass,
   FileSpreadsheet,
   CalendarClock,
+  CheckCircle2,
   LucideProps,
 } from 'lucide-react';
 
@@ -68,6 +69,7 @@ export const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   MessageSquare,
   FileSpreadsheet,
   CalendarClock,
+  CheckCircle2,
 };
 
 interface NavIconProps extends LucideProps {

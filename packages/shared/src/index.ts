@@ -135,6 +135,11 @@ export * from './reports';
 // Offers, Global Search & Analytics (Prompt 21)
 export * from './offers';
 
+// Placement Records, Fees & Recruiter Handover (Prompt 27)
+export * from './placements';
+export * from './handover';
+
+
 
 
 
