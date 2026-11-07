@@ -28,6 +28,8 @@ import { clientPortalRoutes } from './routes/client-portal.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { taskRoutes } from './routes/tasks.js';
 import { automationRoutes } from './routes/automation.js';
+import { slotInvitationRoutes } from './routes/slot-invitations.js';
+import { candidatePortalRoutes } from './routes/candidate-portal.js';
 
 dotenv.config();
 
@@ -152,6 +154,8 @@ export function buildServer() {
   server.register(notificationRoutes, { prefix: '/api/notifications' });
   server.register(taskRoutes, { prefix: '/api/tasks' });
   server.register(automationRoutes, { prefix: '/api/automation' });
+  server.register(slotInvitationRoutes, { prefix: '/api/slot-invitations' });
+  server.register(candidatePortalRoutes, { prefix: '/api/candidate-portal' });
 
   return server;
 }

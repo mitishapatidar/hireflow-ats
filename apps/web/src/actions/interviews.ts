@@ -19,6 +19,7 @@ import {
   isTimeOverlapping,
   MockCalendarAvailabilityProvider,
   MockVideoMeetingProvider,
+  getVideoMeetingProvider,
   buildReminderConfig,
   validateInterviewTransition,
   ScheduleInterviewInputSchema,
@@ -1025,3 +1026,86 @@ export async function getInterviewPrerequisitesAction() {
     return { success: false, error: err.message || 'Failed to fetch prerequisites' };
   }
 }
+
+/**
+ * Retry or regenerate video meeting room link (Prompt 25 Section 4)
+ */
+export async function retryVideoMeetingAction(interviewId: string, provider?: VideoProvider) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || !canAccessInterviews(user.role)) {
+      return { success: false, error: 'Unauthorized or forbidden' };
+    }
+
+    const interview = await prisma.interview.findUnique({
+      where: { id: interviewId },
+      include: {
+        application: {
+          include: { candidate: true, job: true },
+        },
+      },
+    });
+
+    if (!interview) {
+      return { success: false, error: 'Interview not found' };
+    }
+
+    const chosenProvider = provider || (interview.provider as VideoProvider) || VideoProvider.GOOGLE_MEET;
+    const providerInstance = getVideoMeetingProvider(chosenProvider, { allowMockFallback: true });
+
+    const topic = `${interview.application.job.title} - Interview with ${interview.application.candidate.name}`;
+    const result = await providerInstance.createMeeting({
+      interviewId: interview.id,
+      topic,
+      startTimeUtc: interview.scheduledAt,
+      durationMinutes: interview.duration,
+      timezone: interview.timezone || 'Asia/Kolkata',
+      attendeeEmails: [interview.application.candidate.email],
+      idempotencyKey: `retry:${interview.id}:${Date.now()}`,
+    });
+
+    await prisma.videoMeeting.upsert({
+      where: { interviewId: interview.id },
+      create: {
+        interviewId: interview.id,
+        provider: chosenProvider,
+        externalId: result.externalId,
+        joinUrl: result.joinUrl,
+        hostUrl: result.hostUrl,
+        passcode: result.passcode,
+        status: result.status,
+        errorMessage: result.errorMessage,
+        idempotencyKey: `retry:${interview.id}:${Date.now()}`,
+      },
+      update: {
+        provider: chosenProvider,
+        externalId: result.externalId,
+        joinUrl: result.joinUrl,
+        hostUrl: result.hostUrl,
+        passcode: result.passcode,
+        status: result.status,
+        errorMessage: result.errorMessage,
+      },
+    });
+
+    if (result.joinUrl) {
+      await prisma.interview.update({
+        where: { id: interview.id },
+        data: { meetingLink: result.joinUrl, provider: chosenProvider },
+      });
+    }
+
+    revalidatePath('/interviews');
+    return {
+      success: true,
+      data: {
+        provider: chosenProvider,
+        joinUrl: result.joinUrl,
+        status: result.status,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to retry video meeting creation' };
+  }
+}
+

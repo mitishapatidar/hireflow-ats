@@ -150,6 +150,7 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'POST', url: '/api/interviews/:id/no-show', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'POST', url: '/api/interviews/:id/feedback', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
   { method: 'POST', url: '/api/interviews/:id/task', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/interviews/:id/meeting', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
 
   // Communications
   { method: 'GET', url: '/api/communications/threads', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
@@ -295,6 +296,15 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'POST', url: '/api/automation/preview', isPublic: false, allowedRoles: [UserRole.ADMIN] },
   { method: 'GET', url: '/api/automation/executions', isPublic: false, allowedRoles: [UserRole.ADMIN] },
   { method: 'GET', url: '/api/automation/digests/today', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+
+  // Video Meetings, Self-Scheduling & Candidate Portal (Prompt 25)
+  { method: 'POST', url: '/api/slot-invitations', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/slot-invitations/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'DELETE', url: '/api/slot-invitations/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/slot-invitations/public/slots/:token', isPublic: true, publicReason: 'Candidate slot selection via secure token' },
+  { method: 'POST', url: '/api/slot-invitations/public/slots/:token/confirm', isPublic: true, publicReason: 'Candidate slot booking confirmation' },
+  { method: 'GET', url: '/api/candidate-portal/me', isPublic: false, allowedRoles: [UserRole.CANDIDATE, UserRole.ADMIN] },
+  { method: 'PATCH', url: '/api/candidate-portal/profile', isPublic: false, allowedRoles: [UserRole.CANDIDATE, UserRole.ADMIN] },
 ];
 
 async function runAuthorizationAudit() {

@@ -27,6 +27,7 @@ import {
   PanelFeedbackInputSchema,
   CreateFollowUpTaskInputSchema,
 } from '@hireflow/shared';
+import { createVideoMeetingForInterview, sendInterviewConfirmation } from '../services/video-meetings.js';
 
 export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstance) => {
   // Helper: Write Audit Log
@@ -562,22 +563,6 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
           },
         });
 
-        // Generate mock meeting link using Provider Abstraction
-        const meetingInfo = MockVideoMeetingProvider.generateMeetingLink(
-          input.provider,
-          newInterview.id
-        );
-
-        // Update with meeting link
-        const updated = await tx.interview.update({
-          where: { id: newInterview.id },
-          data: { meetingLink: meetingInfo.meetingUrl },
-          include: {
-            panelMembers: { include: { user: true } },
-            round: true,
-          },
-        });
-
         // Record InterviewHistory
         await tx.interviewHistory.create({
           data: {
@@ -588,13 +573,25 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
             actorId: user.id,
             metadata: {
               provider: input.provider,
-              meetingUrl: meetingInfo.meetingUrl,
               duration: input.duration,
             },
           },
         });
 
-        return updated;
+        return newInterview;
+      });
+
+      // POST-PERSISTENCE VIDEO MEETING & NOTIFICATIONS (Prompt 25 Section 4)
+      await createVideoMeetingForInterview(interview.id);
+      await sendInterviewConfirmation(interview.id);
+
+      const finalInterview = await prisma.interview.findUnique({
+        where: { id: interview.id },
+        include: {
+          panelMembers: { include: { user: true } },
+          round: true,
+          videoMeeting: true,
+        },
       });
 
       // Write Audit Log
@@ -609,7 +606,7 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
 
       return reply.status(201).send({
         success: true,
-        data: interview,
+        data: finalInterview || interview,
         message: 'Interview successfully scheduled',
       });
     } catch (err: any) {
@@ -623,9 +620,10 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
         });
       }
       server.log.error(err, 'Failed to schedule interview');
+      console.error('ERROR IN POST /api/interviews:', err);
       return reply.status(500).send({
         success: false,
-        error: { message: 'An unexpected error occurred while scheduling the interview.' },
+        error: { message: err?.message || 'An unexpected error occurred while scheduling the interview.' },
       });
     }
   });
@@ -731,12 +729,6 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
           );
         }
 
-        // Regenerate mock meeting link
-        const newMeeting = MockVideoMeetingProvider.generateMeetingLink(
-          (interview.provider as VideoProvider) || VideoProvider.GOOGLE_MEET,
-          interview.id
-        );
-
         // Update interview
         const res = await tx.interview.update({
           where: { id: interview.id },
@@ -746,7 +738,6 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
             duration,
             outcome: InterviewOutcome.RESCHEDULED,
             rescheduleReason: input.rescheduleReason,
-            meetingLink: newMeeting.meetingUrl,
           },
         });
 
@@ -765,6 +756,19 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
         return res;
       });
 
+      // Synchronize video meeting and calendar invite updates (Prompt 25 Section 5)
+      await createVideoMeetingForInterview(interview.id, { forceRetry: true });
+      await sendInterviewConfirmation(interview.id, { isReschedule: true });
+
+      const finalRescheduled = await prisma.interview.findUnique({
+        where: { id: interview.id },
+        include: {
+          panelMembers: { include: { user: true } },
+          round: true,
+          videoMeeting: true,
+        },
+      });
+
       await logInterviewAudit(user.id, 'interview.rescheduled', interview.id, {
         previousScheduledAt: interview.scheduledAt.toISOString(),
       }, {
@@ -774,7 +778,7 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
 
       return reply.send({
         success: true,
-        data: updated,
+        data: finalRescheduled || updated,
         message: 'Interview successfully rescheduled',
       });
     } catch (err: any) {
@@ -793,6 +797,37 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
         error: { message: 'Failed to reschedule interview' },
       });
     }
+  });
+
+  // ==========================================
+  // RETRY / CREATE VIDEO MEETING (Prompt 25 Section 4)
+  // ==========================================
+  server.post('/:id/meeting', { preHandler: [(server as any).authenticate] }, async (request, reply) => {
+    const user = (request as any).user;
+    if (!user) {
+      return reply.status(401).send({ success: false, error: { message: 'Unauthorized' } });
+    }
+
+    if (user.role === UserRole.CLIENT || user.role === UserRole.CANDIDATE) {
+      return reply.status(403).send({ success: false, error: { message: 'Forbidden' } });
+    }
+
+    const { id } = request.params as { id: string };
+    const access = await verifyInterviewAccess(id, user);
+    if (!access.allowed) {
+      return reply.status(access.status || 403).send({ success: false, error: { message: access.error } });
+    }
+
+    const body = (request.body as any) || {};
+    const meetingResult = await createVideoMeetingForInterview(id, {
+      forceRetry: true,
+      provider: body.provider,
+    });
+    return reply.send({
+      success: meetingResult.success,
+      data: meetingResult,
+      message: meetingResult.success ? 'Video meeting successfully generated' : 'Video meeting setup required or failed',
+    });
   });
 
   // ==========================================
@@ -857,6 +892,17 @@ export const interviewRoutes: FastifyPluginAsync = async (server: FastifyInstanc
 
       return res;
     });
+
+    // Mark VideoMeeting cancelled and dispatch cancellation notice with cancel .ics (Prompt 25 Section 5)
+    try {
+      await prisma.videoMeeting.updateMany({
+        where: { interviewId: interview.id },
+        data: { status: 'CANCELLED' },
+      });
+      await sendInterviewConfirmation(interview.id, { cancellationReason: input.cancellationReason });
+    } catch {
+      // Non-blocking notification dispatch
+    }
 
     await logInterviewAudit(user.id, 'interview.cancelled', interview.id, {
       outcome: interview.outcome,

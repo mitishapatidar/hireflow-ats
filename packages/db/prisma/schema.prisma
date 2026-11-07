@@ -203,6 +203,7 @@ model User {
   exportRequests         ExportRequest[]
   extensionTokens        ExtensionCaptureToken[]
   dailyDigests           DailyDigest[]
+  candidateProfile       Candidate?                @relation("CandidateUser")
 
   @@index([organizationId])
   @@index([role])
@@ -378,6 +379,8 @@ model Candidate {
   source            String?
   ownerId           String?
   owner             User?        @relation("CandidateOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  userId            String?      @unique
+  user              User?        @relation("CandidateUser", fields: [userId], references: [id], onDelete: SetNull)
   organizationId    String
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   consentRecordedAt DateTime?
@@ -898,6 +901,7 @@ model Application {
   submissions     Submission[]
   offers          Offer[]
   placement       Placement?
+  slotInvitations SlotInvitation[]
 
   @@unique([candidateId, jobId])
   @@index([candidateId])
@@ -973,6 +977,7 @@ model Interview {
   feedbacks       InterviewFeedback[]
   slotInvitations SlotInvitation[]
   histories       InterviewHistory[]
+  videoMeeting    VideoMeeting?
 
   @@index([applicationId])
   @@index([scheduledAt])
@@ -1035,23 +1040,53 @@ model InterviewHistory {
   @@index([action])
 }
 
+model VideoMeeting {
+  id             String    @id @default(uuid())
+  interviewId    String    @unique
+  interview      Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  provider       String    // GOOGLE_MEET | ZOOM | TEAMS | MOCK
+  externalId     String?
+  joinUrl        String
+  hostUrl        String?
+  passcode       String?
+  status         String    @default("CREATED") // CREATED | FAILED | SETUP_REQUIRED | CANCELLED | MOCK_MODE
+  errorMessage   String?
+  metadata       Json?
+  idempotencyKey String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([provider])
+  @@index([status])
+}
+
 model SlotInvitation {
-  id            String     @id @default(uuid())
-  interviewId   String?
-  interview     Interview? @relation(fields: [interviewId], references: [id], onDelete: SetNull)
-  applicationId String
-  invitedUserId String?
-  token         String     @unique
-  status        String     @default("PENDING")
-  expiresAt     DateTime
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  createdById   String?
+  id             String      @id @default(uuid())
+  interviewId    String?
+  interview      Interview?  @relation(fields: [interviewId], references: [id], onDelete: SetNull)
+  applicationId  String
+  application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  invitedUserId  String?
+  roundId        String?
+  token          String      @unique
+  tokenHash      String?     @unique
+  status         String      @default("PENDING") // PENDING | BOOKED | EXPIRED | CANCELLED
+  expiresAt      DateTime
+  duration       Int         @default(45)
+  timezone       String      @default("Asia/Kolkata")
+  panelMemberIds String[]    @default([])
+  notes          String?
+  isArchived     Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  createdById    String?
 
   slotOptions SlotOption[]
 
   @@index([applicationId])
   @@index([token])
+  @@index([tokenHash])
+  @@index([status])
 }
 
 model SlotOption {
@@ -1060,12 +1095,14 @@ model SlotOption {
   invitation   SlotInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
   startTime    DateTime
   endTime      DateTime
+  isAvailable  Boolean        @default(true)
   isSelected   Boolean        @default(false)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   createdById  String?
 
   @@index([invitationId])
+  @@index([startTime])
 }
 
 // ==========================================
