@@ -63,5 +63,45 @@ export type UpdateClientWorkflowDraftInput = z.infer<typeof UpdateClientWorkflow
 export const PublishClientWorkflowSchema = z.object({
   clientId: z.string().uuid('Invalid client ID').optional(),
   changeSummary: z.string().min(3, 'A summary of workflow changes is required for audit compliance'),
+  stageRemappings: z
+    .array(
+      z.object({
+        fromStageId: z.string().min(1),
+        toStageId: z.string().min(1),
+      })
+    )
+    .optional()
+    .default([]),
 });
 export type PublishClientWorkflowInput = z.infer<typeof PublishClientWorkflowSchema>;
+
+// ==========================================
+// 2. PROTECTED STAGE HELPERS
+// ==========================================
+
+/**
+ * Checks if a pipeline stage represents a final protected placement/Joined state.
+ * Protected stages cannot be removed or have their placement nature mutated.
+ */
+export function isProtectedStage(stageType?: string | null, stageName?: string | null): boolean {
+  if (!stageType && !stageName) return false;
+  const upperType = (stageType || '').toUpperCase();
+  const upperName = (stageName || '').trim().toUpperCase();
+
+  return (
+    upperType === 'HIRED' ||
+    upperType === 'PLACED' ||
+    upperName === 'PLACED' ||
+    upperName === 'JOINED' ||
+    upperName === 'HIRED'
+  );
+}
+
+export const StageRemappingSchema = z.object({
+  clientId: z.string().min(1),
+  fromStageId: z.string().min(1, 'Source stage ID is required'),
+  toStageId: z.string().min(1, 'Target replacement stage ID is required'),
+  comments: z.string().max(250).optional(),
+});
+
+export type StageRemappingInput = z.infer<typeof StageRemappingSchema>;

@@ -156,6 +156,7 @@ model Organization {
   handoverRequests       HandoverRequest[]
   ownershipHistories     OwnershipHistory[]
   applicationDrafts      ApplicationDraft[]
+  campaigns              Campaign[]
 
   @@index([status])
 }
@@ -227,6 +228,7 @@ model User {
   ownershipTransfersFrom       OwnershipHistory[]            @relation("OwnershipFromUser")
   ownershipTransfersTo         OwnershipHistory[]            @relation("OwnershipToUser")
   ownershipTransfersExecuted   OwnershipHistory[]            @relation("OwnershipTransferredBy")
+  campaignsCreated             Campaign[]                    @relation("CampaignCreator")
 
   @@index([organizationId])
   @@index([role])
@@ -411,6 +413,10 @@ model Candidate {
   whatsappOptInAt       DateTime?
   smsOptIn              Boolean      @default(false)
   smsOptInAt            DateTime?
+  emailMarketingOptIn    Boolean      @default(true)
+  emailMarketingOptInAt  DateTime?
+  emailMarketingOptOutAt DateTime?
+  unsubscribeToken       String?      @unique
   isArchived            Boolean      @default(false)
   archivedAt            DateTime?
   archivedById          String?
@@ -433,6 +439,7 @@ model Candidate {
   threads             Thread[]
   activities          CandidateActivity[]
   recruiterActivities RecruiterActivity[]
+  campaignRecipients  CampaignRecipient[]
 
   @@index([organizationId])
   @@index([ownerId])
@@ -1545,7 +1552,8 @@ model Template {
   updatedAt             DateTime       @updatedAt
   createdById           String?
 
-  messages Message[]
+  messages  Message[]
+  campaigns Campaign[]
 
   @@index([channel])
   @@index([category])
@@ -2245,4 +2253,73 @@ model ClientReportDelivery {
   @@index([scheduleId])
   @@index([status])
   @@index([scheduledFor])
+}
+
+// ==========================================
+// MODULE: BULK CAMPAIGNS (Figma Frame 26)
+// ==========================================
+
+model Campaign {
+  id              String       @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  channel         String       // "EMAIL" | "SMS"
+  status          String       @default("DRAFT") // "DRAFT" | "SCHEDULED" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED"
+  subject         String?      // For EMAIL
+  senderIdentity  String?      // e.g. "careers@aurevacapital.com" or DLT Header
+  replyTo         String?
+  dltTemplateId   String?      // For SMS TRAI DLT registration
+  dltHeaderId     String?      // For SMS TRAI Sender ID
+  body            String
+  templateId      String?
+  template        Template?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  audienceFilters Json?        // Tags, locations, candidate scope, client scope, job relation
+  totalAudience   Int          @default(0)
+  eligibleCount   Int          @default(0)
+  excludedCount   Int          @default(0)
+  sentCount       Int          @default(0)
+  deliveredCount  Int          @default(0)
+  failedCount     Int          @default(0)
+  bouncedCount    Int          @default(0)
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  createdById     String
+  createdBy       User         @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  recipients      CampaignRecipient[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, channel])
+  @@index([scheduledAt])
+  @@index([createdById])
+}
+
+model CampaignRecipient {
+  id                String     @id @default(uuid())
+  campaignId        String
+  campaign          Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  candidateId       String?
+  candidate         Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  recipient         String     // email address or E.164 phone number
+  recipientName     String?
+  status            String     @default("PENDING") // "PENDING" | "SENT" | "DELIVERED" | "FAILED" | "BOUNCED" | "EXCLUDED"
+  exclusionReason   String?    // "NO_EMAIL_CONSENT" | "NO_SMS_CONSENT" | "OPTED_OUT" | "INVALID_FORMAT" | "UNAUTHORIZED_SCOPE" | "SUPPRESSED" | "DUPLICATE"
+  providerMessageId String?
+  errorMessage      String?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  idempotencyKey    String?    @unique
+  unsubscribeToken  String?    @unique
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([campaignId, status])
+  @@index([candidateId])
+  @@index([unsubscribeToken])
+  @@index([recipient])
 }

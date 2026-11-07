@@ -34,6 +34,7 @@ import {
   publishWorkflowAction,
   getClientWorkflowAction,
 } from '@/actions/client-workflows';
+import { isProtectedStage } from '@hireflow/shared';
 
 interface Stage {
   id?: string;
@@ -42,6 +43,8 @@ interface Stage {
   stageType: string;
   colorHex: string;
   isActive: boolean;
+  inUseCount?: number;
+  isProtected?: boolean;
 }
 
 interface Round {
@@ -182,6 +185,16 @@ export function ClientWorkflowClientView({
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishChangeSummary, setPublishChangeSummary] = useState('');
   const [publishSubmitting, setPublishSubmitting] = useState(false);
+  const [stageRemappings, setStageRemappings] = useState<Array<{ fromStageId: string; toStageId: string }>>([]);
+  const [remapModalState, setRemapModalState] = useState<{
+    isOpen: boolean;
+    stageIndex: number | null;
+    targetStageId: string;
+  }>({
+    isOpen: false,
+    stageIndex: null,
+    targetStageId: '',
+  });
 
   const [showStageModal, setShowStageModal] = useState(false);
   const [editingStageIndex, setEditingStageIndex] = useState<number | null>(null);
@@ -361,7 +374,7 @@ export function ClientWorkflowClientView({
         },
       });
 
-      const res = await publishWorkflowAction(clientId, publishChangeSummary.trim());
+      const res = await publishWorkflowAction(clientId, publishChangeSummary.trim(), stageRemappings);
       if (!res.success) {
         showNotification('error', res.error || 'Failed to publish workflow');
         setPublishSubmitting(false);
@@ -449,13 +462,47 @@ export function ClientWorkflowClientView({
 
   function handleDeleteStage(index: number) {
     if (!isDraftMode) return;
+    const stage = stages[index];
+    if (stage && isProtectedStage(stage.stageType, stage.name)) {
+      showNotification('error', "Protected stage: The 'Placed' / 'Joined' stage is protected and cannot be deleted.");
+      return;
+    }
     if (stages.length <= 1) {
       showNotification('error', 'A client workflow must have at least one pipeline stage.');
       return;
     }
+
+    if (stage && (stage.inUseCount || 0) > 0 && stage.id) {
+      const remaining = stages.filter((_, idx) => idx !== index && !isProtectedStage(_.stageType, _.name));
+      const defaultTarget = remaining[0]?.id || stages.find((_, idx) => idx !== index)?.id || '';
+      setRemapModalState({
+        isOpen: true,
+        stageIndex: index,
+        targetStageId: defaultTarget,
+      });
+      return;
+    }
+
     const filtered = stages.filter((_, idx) => idx !== index).map((s, idx) => ({ ...s, order: idx + 1 }));
     setStages(filtered);
     setHasUnsavedChanges(true);
+  }
+
+  function handleConfirmRemap() {
+    if (remapModalState.stageIndex === null) return;
+    const stage = stages[remapModalState.stageIndex];
+    if (stage && stage.id && remapModalState.targetStageId) {
+      setStageRemappings((prev) => [
+        ...prev.filter((r) => r.fromStageId !== stage.id),
+        { fromStageId: stage.id!, toStageId: remapModalState.targetStageId },
+      ]);
+    }
+
+    const filtered = stages.filter((_, idx) => idx !== remapModalState.stageIndex).map((s, idx) => ({ ...s, order: idx + 1 }));
+    setStages(filtered);
+    setHasUnsavedChanges(true);
+    setRemapModalState({ isOpen: false, stageIndex: null, targetStageId: '' });
+    showNotification('success', `Active candidates will be remapped to the selected stage upon publishing.`);
   }
 
   // Round Helpers
@@ -786,6 +833,21 @@ export function ClientWorkflowClientView({
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-[#6B7490] font-semibold">
                         {stage.stageType}
                       </span>
+                      {isProtectedStage(stage.stageType, stage.name) && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold flex items-center gap-1 border border-emerald-200" title="Protected terminal stage cannot be deleted or mutated">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>Protected</span>
+                        </span>
+                      )}
+                      {stage.inUseCount !== undefined && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-semibold border ${
+                          stage.inUseCount > 0
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-slate-50 text-slate-500 border-slate-200'
+                        }`}>
+                          In Use: {stage.inUseCount} {stage.inUseCount === 1 ? 'candidate' : 'candidates'}
+                        </span>
+                      )}
                       {!stage.isActive && (
                         <span className="text-[10px] px-2 py-0.5 rounded bg-rose-50 text-rose-600 font-semibold">
                           Disabled
@@ -826,9 +888,9 @@ export function ClientWorkflowClientView({
                     </button>
                     <button
                       onClick={() => handleDeleteStage(idx)}
-                      disabled={stages.length <= 1}
+                      disabled={stages.length <= 1 || isProtectedStage(stage.stageType, stage.name)}
                       className="p-1.5 text-[#6B7490] hover:text-rose-600 hover:bg-rose-50 rounded-lg disabled:opacity-30 cursor-pointer"
-                      title="Delete Stage"
+                      title={isProtectedStage(stage.stageType, stage.name) ? "Protected terminal stage cannot be deleted" : "Delete Stage"}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1513,6 +1575,71 @@ export function ClientWorkflowClientView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Remap Active Candidates */}
+      {remapModalState.isOpen && remapModalState.stageIndex !== null && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E6E8F0] shadow-xl w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-[#E6E8F0]">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <h3 className="font-bold text-sm text-[#1B2236]">Stage In Use — Candidate Remapping</h3>
+              </div>
+              <button
+                onClick={() => setRemapModalState({ isOpen: false, stageIndex: null, targetStageId: '' })}
+                className="p-1 text-[#6B7490] hover:text-[#1B2236] rounded-md cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 leading-relaxed">
+                The stage <strong>{stages[remapModalState.stageIndex]?.name}</strong> currently has{' '}
+                <strong>{stages[remapModalState.stageIndex]?.inUseCount || 0} active candidate(s)</strong>.
+                Before deleting this stage, choose a destination stage to reassign these candidates.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#1B2236] mb-1.5">
+                  Select Destination Stage <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  value={remapModalState.targetStageId}
+                  onChange={(e) => setRemapModalState((prev) => ({ ...prev, targetStageId: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-[#E6E8F0] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#5B49D6] bg-white font-medium"
+                >
+                  {stages
+                    .filter((_, idx) => idx !== remapModalState.stageIndex)
+                    .map((st) => (
+                      <option key={st.id || st.name} value={st.id || st.name}>
+                        {st.name} ({st.stageType})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E6E8F0]">
+                <button
+                  type="button"
+                  onClick={() => setRemapModalState({ isOpen: false, stageIndex: null, targetStageId: '' })}
+                  className="px-3.5 py-2 border border-[#E6E8F0] text-[#6B7490] rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRemap}
+                  disabled={!remapModalState.targetStageId}
+                  className="px-4 py-2 bg-[#5B49D6] hover:bg-[#5B49D6]/90 text-white rounded-xl text-xs font-semibold shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  Confirm Remap & Remove Stage
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

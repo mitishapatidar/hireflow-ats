@@ -372,6 +372,22 @@ const ROUTE_SECURITY_REGISTRY: RoutePolicy[] = [
   { method: 'POST', url: '/api/public/careers/applications/draft', isPublic: true, publicReason: 'Save application draft without pipeline placement' },
   { method: 'GET', url: '/api/public/careers/applications/draft/:token', isPublic: true, publicReason: 'Resume application draft using secure token' },
   { method: 'POST', url: '/api/public/careers/applications/submit', isPublic: true, publicReason: 'Public candidate application intake with CAPTCHA & honeypot' },
+
+  // Prompt 29: Bulk Email/SMS Campaigns & Delivery
+  { method: 'GET', url: '/api/campaigns', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/campaigns', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/campaigns/test-send', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/campaigns/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'PATCH', url: '/api/campaigns/:id', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/campaigns/:id/audience', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/campaigns/:id/schedule', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/campaigns/:id/cancel', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'POST', url: '/api/campaigns/:id/retry', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+  { method: 'GET', url: '/api/campaigns/:id/recipients', isPublic: false, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.RECRUITER] },
+
+  // Prompt 29: Public Candidate 1-Click Unsubscribe
+  { method: 'GET', url: '/api/public/unsubscribe/:token', isPublic: true, publicReason: 'Public candidate 1-click unsubscribe verification' },
+  { method: 'POST', url: '/api/public/unsubscribe/:token', isPublic: true, publicReason: 'Public candidate 1-click unsubscribe submission' },
 ];
 
 async function runAuthorizationAudit() {

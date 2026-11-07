@@ -96,51 +96,87 @@ export const pipelineRoutes: FastifyPluginAsync = async (server) => {
       }
       const job = access.job;
 
-      // 1. Fetch all active stages for this organization ordered by order asc
-      const stages = await prisma.stage.findMany({
-        where: {
-          organizationId: user.organizationId,
-          isArchived: false,
-        },
-        orderBy: { order: 'asc' },
-      });
+      // 1. Resolve client custom stages if published workflow exists; otherwise default organization stages
+      let resolvedStages: Array<{
+        id: string;
+        name: string;
+        stageType: string;
+        order: number;
+        isArchived: boolean;
+        colorHex?: string;
+        isProtected?: boolean;
+      }> = [];
 
-      // 2. Fetch total counts per stage
-      const stageCountsRaw = await prisma.application.groupBy({
-        by: ['stageId'],
-        where: { jobId },
-        _count: { id: true },
-      });
+      if (job.clientId) {
+        const publishedWorkflow = await prisma.clientWorkflow.findFirst({
+          where: { clientId: job.clientId, status: 'PUBLISHED' },
+          include: {
+            stages: { where: { isArchived: false, isActive: true }, orderBy: { order: 'asc' } },
+          },
+          orderBy: { version: 'desc' },
+        });
 
-      const countsMap: Record<string, number> = {};
-      let totalApplications = 0;
-      stageCountsRaw.forEach((sc) => {
-        if (sc.stageId) {
-          countsMap[sc.stageId] = sc._count.id;
-          totalApplications += sc._count.id;
+        if (publishedWorkflow && publishedWorkflow.stages.length > 0) {
+          resolvedStages = publishedWorkflow.stages.map((cs) => ({
+            id: cs.id,
+            name: cs.name,
+            stageType: cs.stageType,
+            order: cs.order,
+            isArchived: cs.isArchived,
+            colorHex: (cs.configuration as any)?.colorHex || '#4A5568',
+            isProtected: cs.stageType === 'HIRED' || cs.stageType === 'PLACED' || cs.name.toLowerCase() === 'placed' || cs.name.toLowerCase() === 'joined',
+          }));
         }
-      });
+      }
 
-      // 3. Fetch first page of candidate cards for each stage (limit 20 per column)
+      if (resolvedStages.length === 0) {
+        const defaultStages = await prisma.stage.findMany({
+          where: {
+            organizationId: user.organizationId,
+            isArchived: false,
+          },
+          orderBy: { order: 'asc' },
+        });
+        resolvedStages = defaultStages.map((st) => ({
+          id: st.id,
+          name: st.name,
+          stageType: st.stageType,
+          order: st.order,
+          isArchived: st.isArchived,
+          colorHex: '#4A5568',
+          isProtected: st.stageType === 'PLACED' || st.name.toLowerCase() === 'placed',
+        }));
+      }
+
+      // 2. Fetch cards & total counts per stage
       const columns: Record<string, any> = {};
 
-      for (const st of stages) {
-        const count = countsMap[st.id] || 0;
-        const applications = await prisma.application.findMany({
-          where: {
-            jobId,
-            stageId: st.id,
-          },
-          include: {
-            candidate: {
-              include: {
-                owner: { select: { id: true, name: true } },
+      for (const st of resolvedStages) {
+        const stageCondition: any = {
+          jobId,
+          OR: [
+            { stageId: st.id },
+            { stage: { name: st.name } },
+            { stage: { stageType: st.stageType as any } },
+            { status: st.stageType as any },
+          ],
+        };
+
+        const [applications, count] = await Promise.all([
+          prisma.application.findMany({
+            where: stageCondition,
+            include: {
+              candidate: {
+                include: {
+                  owner: { select: { id: true, name: true } },
+                },
               },
             },
-          },
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: 20,
-        });
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: 20,
+          }),
+          prisma.application.count({ where: stageCondition }),
+        ]);
 
         const cards = applications.map((app) => serializePipelineCard(app, user.role));
         const hasMore = count > cards.length;
@@ -153,12 +189,23 @@ export const pipelineRoutes: FastifyPluginAsync = async (server) => {
             stageType: st.stageType,
             order: st.order,
             isArchived: st.isArchived,
+            colorHex: st.colorHex,
+            isProtected: st.isProtected,
           },
           totalCount: count,
           cards,
           hasMore,
           nextCursor,
         };
+      }
+
+      const totalApplications = Object.values(columns).reduce(
+        (acc: number, col: any) => acc + (col.totalCount || 0),
+        0
+      );
+      const countsMap: Record<string, number> = {};
+      for (const st of resolvedStages) {
+        countsMap[st.id] = columns[st.id]?.totalCount || 0;
       }
 
       return reply.send({
@@ -176,7 +223,7 @@ export const pipelineRoutes: FastifyPluginAsync = async (server) => {
             openings: job.openings,
             totalApplications,
           },
-          stages: stages.map((st) => ({
+          stages: resolvedStages.map((st: any) => ({
             id: st.id,
             name: st.name,
             stageType: st.stageType,

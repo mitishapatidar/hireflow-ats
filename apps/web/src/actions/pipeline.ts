@@ -72,43 +72,91 @@ export async function getPipelineAction(jobId: string): Promise<{
     });
     if (!job) return { header: {} as JobPipelineHeaderDTO, columns: [], error: 'Job not found' };
 
-    const stages = await prisma.stage.findMany({
-      where: { organizationId: job.organizationId, isArchived: false },
-      orderBy: { order: 'asc' },
-    });
+    // Resolve client custom stages if published workflow exists; otherwise default organization stages
+    let resolvedStages: Array<{
+      id: string;
+      name: string;
+      stageType: string;
+      order: number;
+      isArchived: boolean;
+      colorHex?: string;
+      isProtected?: boolean;
+    }> = [];
 
-    const counts = await prisma.application.groupBy({
-      by: ['stageId'],
-      where: { jobId },
-      _count: { id: true },
-    });
+    if (job.clientId) {
+      const publishedWorkflow = await prisma.clientWorkflow.findFirst({
+        where: { clientId: job.clientId, status: 'PUBLISHED' },
+        include: {
+          stages: { where: { isArchived: false, isActive: true }, orderBy: { order: 'asc' } },
+        },
+        orderBy: { version: 'desc' },
+      });
 
-    const countMap = new Map(counts.map((c) => [c.stageId ?? '', c._count?.id ?? 0]));
+      if (publishedWorkflow && publishedWorkflow.stages.length > 0) {
+        resolvedStages = publishedWorkflow.stages.map((cs) => ({
+          id: cs.id,
+          name: cs.name,
+          stageType: cs.stageType,
+          order: cs.order,
+          isArchived: cs.isArchived,
+          colorHex: (cs.configuration as any)?.colorHex || '#4A5568',
+          isProtected: cs.stageType === 'HIRED' || cs.stageType === 'PLACED' || cs.name.toLowerCase() === 'placed' || cs.name.toLowerCase() === 'joined',
+        }));
+      }
+    }
+
+    if (resolvedStages.length === 0) {
+      const defaultStages = await prisma.stage.findMany({
+        where: { organizationId: job.organizationId, isArchived: false },
+        orderBy: { order: 'asc' },
+      });
+      resolvedStages = defaultStages.map((st) => ({
+        id: st.id,
+        name: st.name,
+        stageType: st.stageType,
+        order: st.order,
+        isArchived: st.isArchived,
+        colorHex: '#4A5568',
+        isProtected: st.stageType === 'PLACED' || st.name.toLowerCase() === 'placed',
+      }));
+    }
 
     const columns: PipelineColumnDTO[] = await Promise.all(
-      stages.map(async (stage) => {
-        const apps = await prisma.application.findMany({
-          where: { jobId, stageId: stage.id },
-          include: {
-            candidate: {
-              select: {
-                id: true,
-                code: true,
-                name: true,
-                currentTitle: true,
-                currentCompany: true,
-                experienceYears: true,
-                expectedSalary: true,
-                location: true,
-                skills: true,
+      resolvedStages.map(async (stage) => {
+        const stageCondition: any = {
+          jobId,
+          OR: [
+            { stageId: stage.id },
+            { stage: { name: stage.name } },
+            { stage: { stageType: stage.stageType as any } },
+            { status: stage.stageType as any },
+          ],
+        };
+
+        const [apps, totalCount] = await Promise.all([
+          prisma.application.findMany({
+            where: stageCondition,
+            include: {
+              candidate: {
+                select: {
+                  id: true,
+                  code: true,
+                  name: true,
+                  currentTitle: true,
+                  currentCompany: true,
+                  experienceYears: true,
+                  expectedSalary: true,
+                  location: true,
+                  skills: true,
+                },
               },
             },
-          },
-          orderBy: { createdAt: 'asc' },
-          take: 20,
-        });
+            orderBy: { createdAt: 'asc' },
+            take: 20,
+          }),
+          prisma.application.count({ where: stageCondition }),
+        ]);
 
-        const totalCount = countMap.get(stage.id) ?? 0;
         const cards = apps.map((app) => serializePipelineCard(app, user.role as UserRole));
 
         return {
@@ -118,6 +166,8 @@ export async function getPipelineAction(jobId: string): Promise<{
             stageType: stage.stageType as ApplicationStatus,
             order: stage.order,
             isArchived: stage.isArchived,
+            colorHex: stage.colorHex,
+            isProtected: stage.isProtected,
           },
           totalCount,
           cards,
@@ -137,7 +187,7 @@ export async function getPipelineAction(jobId: string): Promise<{
       ownerId: job.ownerId,
       ownerName: job.owner?.name ?? null,
       openings: job.openings,
-      totalApplications: counts.reduce((s, c) => s + (c._count?.id ?? 0), 0),
+      totalApplications: columns.reduce((s, col) => s + col.totalCount, 0),
     };
 
     return { header, columns };

@@ -36,6 +36,7 @@ import { searchRoutes } from './routes/search.js';
 import { placementRoutes } from './routes/placements.js';
 import { handoverRoutes } from './routes/handover.js';
 import { publicCareersRoutes } from './routes/public-careers.js';
+import { campaignRoutes, publicUnsubscribeRoutes } from './routes/campaigns.js';
 
 dotenv.config();
 
@@ -168,6 +169,8 @@ export function buildServer() {
   server.register(placementRoutes, { prefix: '/api/placements' });
   server.register(handoverRoutes, { prefix: '/api/handover' });
   server.register(publicCareersRoutes, { prefix: '/api/public/careers' });
+  server.register(campaignRoutes, { prefix: '/api/campaigns' });
+  server.register(publicUnsubscribeRoutes, { prefix: '/api/public/unsubscribe' });
 
   return server;
 }

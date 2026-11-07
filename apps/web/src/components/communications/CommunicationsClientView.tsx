@@ -263,6 +263,14 @@ export function CommunicationsClientView({ initialInboxData, templates }: Commun
 
         <div className="flex items-center gap-3">
           <Link
+            href="/communications/campaigns"
+            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#5B49D6] hover:bg-[#4D3DC2] rounded-lg shadow-xs transition-colors"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Bulk Campaigns</span>
+          </Link>
+
+          <Link
             href="/communications/templates"
             className="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#1B2236] bg-[#F4F5FA] hover:bg-[#EBECEF] rounded-lg border border-[#E6E8F0] transition-colors"
           >

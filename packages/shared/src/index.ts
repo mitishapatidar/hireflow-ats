@@ -143,6 +143,11 @@ export * from './handover';
 export * from './public-careers';
 export * from './security/captcha';
 
+// Bulk Campaigns & Per-Client Custom Stages (Prompt 29)
+export * from './campaigns';
+export * from './client-workflows';
+
+
 
 
 

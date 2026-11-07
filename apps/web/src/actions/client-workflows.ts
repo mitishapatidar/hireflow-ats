@@ -9,6 +9,7 @@ import {
   UpdateClientWorkflowDraftSchema,
   PublishClientWorkflowSchema,
   UpdateClientWorkflowDraftInput,
+  isProtectedStage,
 } from '@hireflow/shared';
 
 function assertManagerOrAdmin(user: any) {
@@ -144,6 +145,28 @@ export async function getClientWorkflowAction(clientId: string, version?: number
       publisherName = publisher?.name || null;
     }
 
+    // Count active candidates in each stage for this client's jobs
+    const clientJobs = await prisma.job.findMany({
+      where: { clientId, isArchived: false },
+      select: { id: true },
+    });
+    const clientJobIds = clientJobs.map((j) => j.id);
+
+    const activeApplications = clientJobIds.length > 0
+      ? await prisma.application.findMany({
+          where: {
+            jobId: { in: clientJobIds },
+            status: { notIn: ['REJECTED'] },
+          },
+          select: {
+            id: true,
+            stageId: true,
+            status: true,
+            stage: { select: { id: true, name: true, stageType: true } },
+          },
+        })
+      : [];
+
     return {
       success: true,
       data: {
@@ -159,15 +182,27 @@ export async function getClientWorkflowAction(clientId: string, version?: number
           changeSummary: workflow.changeSummary,
           publishedAt: workflow.publishedAt?.toISOString() || null,
           publishedBy: publisherName,
-          stages: workflow.stages.map((s) => ({
-            id: s.id,
-            name: s.name,
-            stageOrder: s.order,
-            order: s.order,
-            stageType: s.stageType,
-            colorHex: (s.configuration as any)?.colorHex || '#4A5568',
-            isActive: s.isActive,
-          })),
+          stages: workflow.stages.map((s) => {
+            const inUseCount = activeApplications.filter((app) => {
+              if (app.stageId === s.id) return true;
+              if (app.stage && app.stage.name.toLowerCase() === s.name.toLowerCase()) return true;
+              if (app.stage && app.stage.stageType === s.stageType) return true;
+              if (app.status === s.stageType) return true;
+              return false;
+            }).length;
+
+            return {
+              id: s.id,
+              name: s.name,
+              stageOrder: s.order,
+              order: s.order,
+              stageType: s.stageType,
+              colorHex: (s.configuration as any)?.colorHex || '#4A5568',
+              isActive: s.isActive,
+              inUseCount,
+              isProtected: isProtectedStage(s.stageType, s.name),
+            };
+          }),
           rounds: workflow.rounds.map((r) => ({
             id: r.id,
             name: r.name,
@@ -381,7 +416,11 @@ export async function updateWorkflowDraftAction(clientId: string, payload: Updat
   }
 }
 
-export async function publishWorkflowAction(clientId: string, changeSummary: string) {
+export async function publishWorkflowAction(
+  clientId: string,
+  changeSummary: string,
+  stageRemappings?: Array<{ fromStageId: string; toStageId: string }>
+) {
   try {
     const user = await getCurrentUser();
     assertManagerOrAdmin(user);
@@ -389,7 +428,7 @@ export async function publishWorkflowAction(clientId: string, changeSummary: str
     const client = await verifyClientAccess(clientId, user!.organizationId);
     if (!client) return { success: false, error: 'Client not found' };
 
-    const parseResult = PublishClientWorkflowSchema.safeParse({ clientId, changeSummary });
+    const parseResult = PublishClientWorkflowSchema.safeParse({ clientId, changeSummary, stageRemappings });
     if (!parseResult.success) {
       return { success: false, error: 'Validation failed: A descriptive change summary is required to publish.' };
     }
@@ -406,7 +445,53 @@ export async function publishWorkflowAction(clientId: string, changeSummary: str
     if (!draft) return { success: false, error: 'No active draft found to publish.' };
     if (draft.stages.length === 0) return { success: false, error: 'Cannot publish workflow with zero pipeline stages.' };
 
+    // Guard: Ensure protected Placed/Joined stage is present
+    const hasProtected = draft.stages.some((s) => isProtectedStage(s.stageType, s.name));
+    if (!hasProtected) {
+      return {
+        success: false,
+        error: "Cannot publish workflow: A protected terminal placement stage ('Placed' or 'Joined') is mandatory.",
+      };
+    }
+
     const publishedWorkflow = await prisma.$transaction(async (tx) => {
+      // Handle stage remappings if provided
+      if (stageRemappings && stageRemappings.length > 0) {
+        for (const remap of stageRemappings) {
+          const fromStage = await tx.clientStage.findUnique({ where: { id: remap.fromStageId } });
+          const toStage = await tx.clientStage.findUnique({ where: { id: remap.toStageId } });
+          if (fromStage && toStage) {
+            const appsToRemap = await tx.application.findMany({
+              where: {
+                job: { clientId },
+                OR: [
+                  { stageId: remap.fromStageId },
+                  { stage: { name: fromStage.name } },
+                ],
+              },
+              select: { id: true },
+            });
+
+            for (const app of appsToRemap) {
+              await tx.application.update({
+                where: { id: app.id },
+                data: { stageId: remap.toStageId },
+              });
+
+              await tx.applicationStageHistory.create({
+                data: {
+                  applicationId: app.id,
+                  fromStage: fromStage.name,
+                  toStage: toStage.name,
+                  changedById: user!.id,
+                  comments: 'Stage remapped upon client workflow version publication',
+                },
+              });
+            }
+          }
+        }
+      }
+
       await tx.clientWorkflow.updateMany({
         where: { clientId, status: 'PUBLISHED' },
         data: { status: 'ARCHIVED' },

@@ -23,7 +23,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     // In dev mode: allow developer role simulation for layout tests
     if (process.env.NODE_ENV === 'development') {
       const devRoleCookie = cookieStore.get('hireflow_dev_role')?.value as UserRole;
-      const firstOrg = await prisma.organization.findFirst({ select: { id: true } });
+      const primaryOrg = await prisma.organization.findUnique({
+        where: { id: 'org-aureva-1' },
+        select: { id: true },
+      });
+      const firstOrg = primaryOrg || (await prisma.organization.findFirst({ select: { id: true } }));
       const orgId = firstOrg?.id || 'org-aureva-1';
 
       const targetRole = devRoleCookie || UserRole.ADMIN;
