@@ -25,6 +25,7 @@ import { PipelineColumn } from './PipelineColumn';
 import { CandidateDrawer } from './CandidateDrawer';
 import { RejectionModal } from './RejectionModal';
 import { AddCandidateModal } from './AddCandidateModal';
+import { MobilePipelineView } from './MobilePipelineView';
 import { transitionApplicationStageAction, loadMoreColumnAction } from '@/actions/pipeline';
 import { UserPlus } from 'lucide-react';
 
@@ -215,8 +216,29 @@ export function PipelineBoard({ initialColumns, header, jobId, currentUser }: Pi
         </button>
       </div>
 
-      {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto">
+      {/* Mobile Touch Pipeline (md:hidden) */}
+      <MobilePipelineView
+        columns={columns}
+        onSelectCandidate={(appId) => setDrawerApplicationId(appId)}
+        onAdvanceStage={(appId, currentStageType) => {
+          const currentIdx = columns.findIndex((c) => c.stage.stageType === currentStageType);
+          if (currentIdx < columns.length - 1) {
+            const targetCol = columns[currentIdx + 1];
+            startTransition(async () => {
+              try {
+                await transitionApplicationStageAction(appId, targetCol.stage.id);
+                window.location.reload();
+              } catch (err) {
+                console.error('Failed to advance stage:', err);
+              }
+            });
+          }
+        }}
+        onRejectCandidate={(appId) => setRejectionApplicationId(appId)}
+      />
+
+      {/* Desktop Kanban Board (hidden md:block) */}
+      <div className="hidden md:flex flex-1 overflow-x-auto">
         <div className="flex gap-4 p-6 h-full min-h-0" style={{ minWidth: `${columns.length * 280 + 48}px` }}>
           <DndContext
             sensors={sensors}

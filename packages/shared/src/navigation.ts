@@ -396,6 +396,8 @@ export const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
   '/admin': [UserRole.MANAGER, UserRole.ADMIN],
   '/admin/automation': [UserRole.ADMIN],
   '/notifications': [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
+  '/mobile': [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
+  '/mobile/today': [UserRole.RECRUITER, UserRole.MANAGER, UserRole.ADMIN],
   '/portal': [UserRole.CLIENT, UserRole.ADMIN],
   '/positions': [UserRole.CLIENT, UserRole.ADMIN],
   '/submitted-profiles': [UserRole.CLIENT, UserRole.ADMIN],
